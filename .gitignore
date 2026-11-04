@@ -12,3 +12,5 @@ dist/
 build/
 *.zip
 .buildozer/
+.buildozer
+buildozer/
