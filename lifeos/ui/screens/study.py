@@ -1,4 +1,4 @@
-"""Study Hub Screen for LifeOS (Academic Tracking & Revision)."""
+"""Study Hub Screen for LifeOS (Shadcn / React Native style)."""
 
 from datetime import date, datetime
 from kivy.uix.screenmanager import Screen
@@ -6,12 +6,9 @@ from kivy.uix.boxlayout import BoxLayout
 from kivy.uix.gridlayout import GridLayout
 from kivy.uix.scrollview import ScrollView
 from kivy.uix.label import Label
-from kivy.graphics import Color, Rectangle, RoundedRectangle, Line
+from kivy.graphics import Color, Rectangle
 from kivymd.uix.button import MDIconButton
-from lifeos.ui.theme import (
-    BG_CANVAS, BG_CARD, BG_CARD_HOVER, BORDER_COLOR,
-    GOLD, CHAMPAGNE, TEXT_PRIMARY, TEXT_SECONDARY, TEXT_MUTED, SUCCESS, WARNING, ERROR
-)
+from lifeos.ui.theme import theme
 from lifeos.ui.components.card import AtelierCard
 from lifeos.ui.components.buttons import AtelierButton, AtelierGhostButton, AtelierBadge
 from lifeos.ui.components.progress import AtelierProgressBar
@@ -24,7 +21,7 @@ class StudyScreen(Screen):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         with self.canvas.before:
-            Color(rgba=BG_CANVAS)
+            self._bg_col = Color(rgba=theme.bg_canvas)
             self._bg = Rectangle(pos=self.pos, size=self.size)
         self.bind(pos=self._update_bg, size=self._update_bg)
 
@@ -62,7 +59,12 @@ class StudyScreen(Screen):
 
         bus.subscribe("study_updated", lambda *_: self.refresh_data())
         bus.subscribe("focus_updated", lambda *_: self.refresh_data())
+        bus.subscribe("theme_changed", self._on_theme)
 
+        self.refresh_data()
+
+    def _on_theme(self, *args, **kwargs):
+        self._bg_col.rgba = theme.bg_canvas
         self.refresh_data()
 
     def _update_bg(self, *args):
@@ -96,7 +98,7 @@ class StudyScreen(Screen):
         stats_card = AtelierCard(
             orientation="vertical",
             spacing=10,
-            padding=[14, 12, 14, 12],
+            padding=[16, 14, 16, 14],
             size_hint_y=None,
             height=90
         )
@@ -104,7 +106,7 @@ class StudyScreen(Screen):
             text="SEMESTRE 1  ·  CYCLE MASTER & LICENCE",
             font_size="10sp",
             bold=True,
-            color=GOLD,
+            color=theme.text_secondary,
             halign="left",
             size_hint_y=None,
             height=16
@@ -114,18 +116,17 @@ class StudyScreen(Screen):
 
         metrics_grid = GridLayout(cols=3, spacing=10, size_hint_y=None, height=44)
         m1 = BoxLayout(orientation="vertical")
-        m1.add_widget(Label(text=f"{len(courses)}", font_size="18sp", bold=True, color=TEXT_PRIMARY))
-        m1.add_widget(Label(text="Matières", font_size="10sp", color=TEXT_SECONDARY))
+        m1.add_widget(Label(text=f"{len(courses)}", font_size="18sp", bold=True, color=theme.text_primary))
+        m1.add_widget(Label(text="Matières", font_size="10sp", color=theme.text_secondary))
 
         m2 = BoxLayout(orientation="vertical")
-        m2.add_widget(Label(text=f"{len(exams)}", font_size="18sp", bold=True, color=GOLD))
-        m2.add_widget(Label(text="Examens", font_size="10sp", color=TEXT_SECONDARY))
+        m2.add_widget(Label(text=f"{len(exams)}", font_size="18sp", bold=True, color=theme.primary))
+        m2.add_widget(Label(text="Examens", font_size="10sp", color=theme.text_secondary))
 
-        # Calculate average grade
         avg_target = sum(c.get("target_grade", 14.0) for c in courses) / max(len(courses), 1)
         m3 = BoxLayout(orientation="vertical")
-        m3.add_widget(Label(text=f"{avg_target:.1f}/20", font_size="18sp", bold=True, color=CHAMPAGNE))
-        m3.add_widget(Label(text="Moy. Cible", font_size="10sp", color=TEXT_SECONDARY))
+        m3.add_widget(Label(text=f"{avg_target:.1f}/20", font_size="18sp", bold=True, color=theme.text_primary))
+        m3.add_widget(Label(text="Moy. Cible", font_size="10sp", color=theme.text_secondary))
 
         metrics_grid.add_widget(m1)
         metrics_grid.add_widget(m2)
@@ -137,23 +138,23 @@ class StudyScreen(Screen):
         session_card = AtelierCard(
             orientation="horizontal",
             spacing=12,
-            padding=[14, 12, 14, 12],
+            padding=[16, 12, 16, 12],
             size_hint_y=None,
-            height=68
+            height=66
         )
         sess_text = BoxLayout(orientation="vertical", spacing=2)
         sess_title = Label(
             text="Lancer une Session Focus d'Étude",
             font_size="14sp",
             bold=True,
-            color=TEXT_PRIMARY,
+            color=theme.text_primary,
             halign="left"
         )
         sess_title.bind(size=sess_title.setter("text_size"))
         sess_sub = Label(
             text="Pomodoro 50m focus / 10m pause · Mémorisation",
             font_size="11sp",
-            color=TEXT_SECONDARY,
+            color=theme.text_secondary,
             halign="left"
         )
         sess_sub.bind(size=sess_sub.setter("text_size"))
@@ -165,7 +166,7 @@ class StudyScreen(Screen):
             text="Démarrer",
             font_size="12sp",
             size_hint=(None, None),
-            size=(86, 38),
+            size=(86, 36),
             pos_hint={"center_y": 0.5}
         )
         btn_go.bind(on_release=lambda _: self._start_focus_session())
@@ -173,12 +174,12 @@ class StudyScreen(Screen):
         self.content.add_widget(session_card)
 
         # 3. Prochains Examens & Échéances
-        sec_ex = BoxLayout(size_hint_y=None, height=24)
+        sec_ex = BoxLayout(size_hint_y=None, height=28)
         lbl_ex = Label(
             text="PROCHAINS EXAMENS & ÉCHÉANCES",
             font_size="11sp",
             bold=True,
-            color=GOLD,
+            color=theme.text_secondary,
             halign="left"
         )
         lbl_ex.bind(size=lbl_ex.setter("text_size"))
@@ -198,7 +199,7 @@ class StudyScreen(Screen):
             no_ex = Label(
                 text="Aucun examen planifié.",
                 font_size="12sp",
-                color=TEXT_MUTED,
+                color=theme.text_muted,
                 size_hint_y=None,
                 height=30
             )
@@ -218,12 +219,11 @@ class StudyScreen(Screen):
                     text=f"{ex.get('course_code', 'UE')} · {ex.get('course_name', '')}",
                     font_size="12sp",
                     bold=True,
-                    color=GOLD,
+                    color=theme.primary,
                     halign="left"
                 )
                 lbl_cname.bind(size=lbl_cname.setter("text_size"))
 
-                # Days countdown
                 try:
                     ex_d = datetime.strptime(ex["date"], "%Y-%m-%d").date()
                     diff = (ex_d - today).days
@@ -231,7 +231,7 @@ class StudyScreen(Screen):
                 except Exception:
                     d_text = ex["date"]
 
-                badge = AtelierBadge(text=d_text, badge_color=WARNING if "J-" in d_text else GOLD)
+                badge = AtelierBadge(text=d_text)
                 top_row.add_widget(lbl_cname)
                 top_row.add_widget(badge)
                 card.add_widget(top_row)
@@ -240,7 +240,7 @@ class StudyScreen(Screen):
                     text=ex["title"],
                     font_size="13sp",
                     bold=True,
-                    color=TEXT_PRIMARY,
+                    color=theme.text_primary,
                     halign="left"
                 )
                 lbl_title.bind(size=lbl_title.setter("text_size"))
@@ -248,9 +248,9 @@ class StudyScreen(Screen):
 
                 sub_row = BoxLayout(size_hint_y=None, height=18)
                 lbl_info = Label(
-                    text=f"📅 {ex['date']}  ·  📍 {ex.get('room', 'Salle de cours')}  ·  Coeff {ex.get('weight', 1.0)}",
-                    font_size="10sp",
-                    color=TEXT_SECONDARY,
+                    text=f"Date: {ex['date']}  ·  Salle: {ex.get('room', 'Amphi')}  ·  Coeff {ex.get('weight', 1.0)}",
+                    font_size="11sp",
+                    color=theme.text_secondary,
                     halign="left"
                 )
                 lbl_info.bind(size=lbl_info.setter("text_size"))
@@ -260,12 +260,12 @@ class StudyScreen(Screen):
                 self.content.add_widget(card)
 
         # 4. Matières Universitaires
-        sec_courses = BoxLayout(size_hint_y=None, height=24)
+        sec_courses = BoxLayout(size_hint_y=None, height=28)
         lbl_cs = Label(
             text="MATIÈRES UNIVERSITAIRES",
             font_size="11sp",
             bold=True,
-            color=GOLD,
+            color=theme.text_secondary,
             halign="left"
         )
         lbl_cs.bind(size=lbl_cs.setter("text_size"))
@@ -287,15 +287,15 @@ class StudyScreen(Screen):
                 spacing=8,
                 padding=[14, 12, 14, 12],
                 size_hint_y=None,
-                height=100
+                height=96
             )
 
             row_top = BoxLayout(size_hint_y=None, height=22)
             lbl_code = Label(
-                text=f"{c['code']}  ·  {c.get('semester', 'S1')}",
+                text=f"{c['code']} · {c.get('semester', 'S1')}",
                 font_size="11sp",
                 bold=True,
-                color=GOLD,
+                color=theme.primary,
                 halign="left"
             )
             lbl_code.bind(size=lbl_code.setter("text_size"))
@@ -304,7 +304,7 @@ class StudyScreen(Screen):
                 text=f"Cible: {c.get('target_grade', 16)}/20",
                 font_size="11sp",
                 bold=True,
-                color=CHAMPAGNE,
+                color=theme.text_secondary,
                 halign="right"
             )
             lbl_grade.bind(size=lbl_grade.setter("text_size"))
@@ -317,20 +317,19 @@ class StudyScreen(Screen):
                 text=c["name"],
                 font_size="14sp",
                 bold=True,
-                color=TEXT_PRIMARY,
+                color=theme.text_primary,
                 halign="left"
             )
             lbl_name.bind(size=lbl_name.setter("text_size"))
             c_card.add_widget(lbl_name)
 
-            # Progress bar based on target vs current
             curr = c.get("current_grade", 14.0)
             target = max(c.get("target_grade", 16.0), 1.0)
             pct = min(100, int((curr / target) * 100))
 
             prog_row = BoxLayout(spacing=10, size_hint_y=None, height=16)
-            prog_bar = AtelierProgressBar(value=pct, size_hint_x=0.75, pos_hint={"center_y": 0.5})
-            lbl_pct = Label(text=f"{pct}%", font_size="11sp", bold=True, color=TEXT_SECONDARY, size_hint_x=0.25)
+            prog_bar = AtelierProgressBar(value=pct, size_hint_x=0.8, pos_hint={"center_y": 0.5})
+            lbl_pct = Label(text=f"{pct}%", font_size="11sp", bold=True, color=theme.text_secondary, size_hint_x=0.2)
             prog_row.add_widget(prog_bar)
             prog_row.add_widget(lbl_pct)
             c_card.add_widget(prog_row)

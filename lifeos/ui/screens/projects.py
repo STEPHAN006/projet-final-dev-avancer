@@ -1,16 +1,14 @@
-"""Projects Overview Screen for LifeOS."""
+"""Projects Portfolio Screen for LifeOS (Shadcn / React Native style)."""
 
 from kivy.uix.screenmanager import Screen
 from kivy.uix.boxlayout import BoxLayout
 from kivy.uix.scrollview import ScrollView
 from kivy.uix.label import Label
 from kivy.graphics import Color, Rectangle
-from lifeos.ui.theme import (
-    BG_CANVAS, BG_CARD, BG_CARD_HOVER, BORDER_COLOR,
-    GOLD, CHAMPAGNE, TEXT_PRIMARY, TEXT_SECONDARY, TEXT_MUTED
-)
+from kivymd.uix.button import MDIconButton
+from lifeos.ui.theme import theme
 from lifeos.ui.components.card import AtelierCard
-from lifeos.ui.components.buttons import AtelierButton, AtelierGhostButton
+from lifeos.ui.components.buttons import AtelierButton, AtelierGhostButton, AtelierBadge
 from lifeos.ui.components.progress import AtelierProgressBar
 from lifeos.ui.components.navigation import AtelierTopBar, AtelierBottomNav
 from lifeos.ui.components.dialogs import AddProjectDialog
@@ -20,8 +18,10 @@ from lifeos.core.events import bus
 class ProjectsScreen(Screen):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
+        self.selected_category = "all"
+
         with self.canvas.before:
-            Color(rgba=BG_CANVAS)
+            self._bg_col = Color(rgba=theme.bg_canvas)
             self._bg = Rectangle(pos=self.pos, size=self.size)
         self.bind(pos=self._update_bg, size=self._update_bg)
 
@@ -30,18 +30,44 @@ class ProjectsScreen(Screen):
         # Top Bar
         self.top_bar = AtelierTopBar(
             title="Projets",
-            subtitle="Vision & Chantiers",
+            subtitle="PORTFOLIO & LIVRABLES",
             right_icon="plus",
             right_action=self._open_add_dialog
         )
         self.root_box.add_widget(self.top_bar)
 
+        # Category Filter Tabs
+        filter_box = BoxLayout(spacing=6, padding=[16, 10, 16, 6], size_hint_y=None, height=48)
+        self.filter_buttons = {}
+        cats = [
+            ("all", "Tous"),
+            ("Dev", "Dev & Code"),
+            ("Académique", "Études"),
+            ("Santé", "Santé"),
+        ]
+        for key, label in cats:
+            btn = AtelierButton(
+                text=label,
+                font_size="11sp",
+                size_hint_x=1.0
+            ) if key == self.selected_category else AtelierGhostButton(
+                text=label,
+                font_size="11sp",
+                size_hint_x=1.0
+            )
+            btn.bind(on_release=lambda inst, k=key: self._set_cat(k))
+            self.filter_buttons[key] = btn
+            filter_box.add_widget(btn)
+
+        self.filter_box = filter_box
+        self.root_box.add_widget(filter_box)
+
         # Projects ScrollView
         self.scroll = ScrollView(size_hint=(1, 1), do_scroll_x=False)
         self.projects_box = BoxLayout(
             orientation="vertical",
-            spacing=14,
-            padding=[16, 16, 16, 20],
+            spacing=12,
+            padding=[16, 8, 16, 20],
             size_hint_y=None
         )
         self.projects_box.bind(minimum_height=self.projects_box.setter("height"))
@@ -59,8 +85,27 @@ class ProjectsScreen(Screen):
 
         bus.subscribe("projects_updated", lambda *_: self.refresh_projects())
         bus.subscribe("tasks_updated", lambda *_: self.refresh_projects())
+        bus.subscribe("theme_changed", self._on_theme)
 
         self.refresh_projects()
+
+    def _on_theme(self, *args, **kwargs):
+        self._bg_col.rgba = theme.bg_canvas
+        self._update_tabs_ui()
+        self.refresh_projects()
+
+    def _update_tabs_ui(self):
+        self.filter_box.clear_widgets()
+        cats = [
+            ("all", "Tous"),
+            ("Dev", "Dev & Code"),
+            ("Académique", "Études"),
+            ("Santé", "Santé"),
+        ]
+        for key, label in cats:
+            btn = AtelierButton(text=label, font_size="11sp", size_hint_x=1.0) if key == self.selected_category else AtelierGhostButton(text=label, font_size="11sp", size_hint_x=1.0)
+            btn.bind(on_release=lambda inst, k=key: self._set_cat(k))
+            self.filter_box.add_widget(btn)
 
     def _update_bg(self, *args):
         self._bg.pos = self.pos
@@ -82,10 +127,14 @@ class ProjectsScreen(Screen):
         self.projects_box.clear_widgets()
         projects = ds.projects.list_projects()
 
+        if self.selected_category != "all":
+            projects = [p for p in projects if p.get("category") == self.selected_category]
+
         if not projects:
             self.projects_box.add_widget(Label(
-                text="Aucun projet actif. Créez-en un avec le bouton '+'.",
-                color=TEXT_MUTED,
+                text="Aucun projet dans cette catégorie.",
+                font_size="13sp",
+                color=theme.text_muted,
                 size_hint_y=None,
                 height=100
             ))
@@ -94,45 +143,36 @@ class ProjectsScreen(Screen):
         for p in projects:
             card = AtelierCard(
                 orientation="vertical",
-                spacing=10,
+                spacing=8,
                 padding=[16, 14, 16, 14],
                 size_hint_y=None,
-                height=138
+                height=110
             )
 
-            # Header row: Title + Category pill
-            hdr = BoxLayout(spacing=8, size_hint_y=None, height=24)
+            # Top Header Row: Category badge & Title
+            row_top = BoxLayout(size_hint_y=None, height=24)
+            cat_badge = AtelierBadge(text=p.get("category", "Dev"))
+            row_top.add_widget(cat_badge)
+
             lbl_title = Label(
                 text=p["title"],
-                font_size="15sp",
+                font_size="14sp",
                 bold=True,
-                color=TEXT_PRIMARY,
+                color=theme.text_primary,
                 halign="left"
             )
             lbl_title.bind(size=lbl_title.setter("text_size"))
-
-            lbl_cat = Label(
-                text=p.get("category", "Dev").upper(),
-                font_size="10sp",
-                bold=True,
-                color=GOLD,
-                halign="right",
-                size_hint_x=0.3
-            )
-            lbl_cat.bind(size=lbl_cat.setter("text_size"))
-
-            hdr.add_widget(lbl_title)
-            hdr.add_widget(lbl_cat)
-            card.add_widget(hdr)
+            row_top.add_widget(lbl_title)
+            card.add_widget(row_top)
 
             # Description
             lbl_desc = Label(
-                text=p.get("description", "") or "Aucune description",
-                font_size="12sp",
-                color=TEXT_SECONDARY,
+                text=p.get("description", ""),
+                font_size="11sp",
+                color=theme.text_secondary,
                 halign="left",
                 size_hint_y=None,
-                height=22
+                height=20
             )
             lbl_desc.bind(size=lbl_desc.setter("text_size"))
             card.add_widget(lbl_desc)
@@ -142,12 +182,12 @@ class ProjectsScreen(Screen):
             pbar = AtelierProgressBar(value=prog_val, bar_height=5)
             card.add_widget(pbar)
 
-            # Footer meta (tasks count & % progress)
+            # Footer meta (tasks count & % progress) without broken emojis
             ftr = BoxLayout(size_hint_y=None, height=22)
             lbl_tasks = Label(
-                text=f"✓ {p.get('completed_tasks', 0)}/{p.get('total_tasks', 0)} tâches",
+                text=f"{p.get('completed_tasks', 0)}/{p.get('total_tasks', 0)} tâches validées",
                 font_size="11sp",
-                color=TEXT_SECONDARY,
+                color=theme.text_secondary,
                 halign="left"
             )
             lbl_tasks.bind(size=lbl_tasks.setter("text_size"))
@@ -156,7 +196,7 @@ class ProjectsScreen(Screen):
                 text=f"{prog_val}%",
                 font_size="12sp",
                 bold=True,
-                color=GOLD,
+                color=theme.primary,
                 halign="right"
             )
             lbl_pct.bind(size=lbl_pct.setter("text_size"))
@@ -165,7 +205,6 @@ class ProjectsScreen(Screen):
             ftr.add_widget(lbl_pct)
             card.add_widget(ftr)
 
-            # Click handler to open project details
             card.bind(on_touch_down=lambda inst, touch, pid=p["id"]: self._on_project_click(inst, touch, pid))
             self.projects_box.add_widget(card)
 
@@ -175,3 +214,8 @@ class ProjectsScreen(Screen):
                 scr = self.manager.get_screen("project_details")
                 scr.load_project(project_id)
                 self.manager.current = "project_details"
+
+    def _set_cat(self, cat):
+        self.selected_category = cat
+        self._update_tabs_ui()
+        self.refresh_projects()

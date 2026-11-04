@@ -118,3 +118,19 @@ def test_settings_screen_refresh():
     screen = SettingsScreen(name="settings")
     screen.refresh_settings()
     assert len(screen.content.children) >= 5
+
+def test_theme_toggle_and_colors():
+    from lifeos.ui.theme import theme
+
+    theme.set_mode("light")
+    assert theme.is_light is True
+    assert theme.bg_canvas != theme.bg_surface or theme.bg_canvas is not None
+
+    bg_u, fg_u = theme.badge_colors("URGENT")
+    assert bg_u is not None and fg_u is not None
+
+    theme.toggle()
+    assert theme.is_light is False
+
+    theme.set_mode("light")
+    assert theme.is_light is True

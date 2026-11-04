@@ -1,22 +1,20 @@
-"""Task Details Screen for LifeOS."""
+"""Task Details Screen for LifeOS (Shadcn / React Native style)."""
 
 from kivy.uix.screenmanager import Screen
 from kivy.uix.boxlayout import BoxLayout
 from kivy.uix.scrollview import ScrollView
 from kivy.uix.label import Label
-from kivy.uix.textinput import TextInput
 from kivy.uix.spinner import Spinner
 from kivy.graphics import Color, Rectangle
 from kivymd.uix.button import MDIconButton
-from lifeos.ui.theme import (
-    BG_CANVAS, BG_CARD, BG_CARD_HOVER, BORDER_COLOR,
-    GOLD, CHAMPAGNE, TEXT_PRIMARY, TEXT_SECONDARY, TEXT_MUTED, ERROR, SUCCESS
-)
+from lifeos.ui.theme import theme
 from lifeos.ui.components.card import AtelierCard
 from lifeos.ui.components.buttons import AtelierButton, AtelierGhostButton, AtelierBadge
 from lifeos.ui.components.checkbox import AtelierCheckbox
 from lifeos.ui.components.navigation import AtelierTopBar
+from lifeos.ui.components.dialogs import ShadcnInput, ShadcnSelect
 from lifeos.services.data_service import ds
+from lifeos.core.events import bus
 
 class TaskDetailsScreen(Screen):
     def __init__(self, **kwargs):
@@ -25,7 +23,7 @@ class TaskDetailsScreen(Screen):
         self.task_data = None
 
         with self.canvas.before:
-            Color(rgba=BG_CANVAS)
+            self._bg_col = Color(rgba=theme.bg_canvas)
             self._bg = Rectangle(pos=self.pos, size=self.size)
         self.bind(pos=self._update_bg, size=self._update_bg)
 
@@ -45,8 +43,8 @@ class TaskDetailsScreen(Screen):
         self.scroll = ScrollView(size_hint=(1, 1), do_scroll_x=False)
         self.content = BoxLayout(
             orientation="vertical",
-            spacing=16,
-            padding=[16, 16, 16, 24],
+            spacing=14,
+            padding=[16, 14, 16, 24],
             size_hint_y=None
         )
         self.content.bind(minimum_height=self.content.setter("height"))
@@ -54,6 +52,20 @@ class TaskDetailsScreen(Screen):
         self.root_box.add_widget(self.scroll)
 
         self.add_widget(self.root_box)
+
+        bus.subscribe("tasks_updated", self._on_tasks_updated)
+        bus.subscribe("theme_changed", self._on_theme)
+
+    def _on_theme(self, *args, **kwargs):
+        self._bg_col.rgba = theme.bg_canvas
+        if self.task_id:
+            self._render_details()
+
+    def _on_tasks_updated(self, *args, **kwargs):
+        if self.task_id:
+            self.task_data = ds.tasks.get_task(self.task_id)
+            if self.task_data:
+                self._render_details()
 
     def _update_bg(self, *args):
         self._bg.pos = self.pos
@@ -70,292 +82,228 @@ class TaskDetailsScreen(Screen):
 
     def _render_details(self):
         self.content.clear_widgets()
-        if not self.task_data:
-            self.content.add_widget(Label(text="Tâche introuvable.", color=TEXT_MUTED))
+        t = self.task_data
+        if not t:
+            self.content.add_widget(Label(text="Tâche introuvable.", color=theme.text_muted))
             return
 
-        t = self.task_data
-
-        # 1. Main Info Card (Title, Status, Priority, Project)
+        # 1. Main Info Card
         card_main = AtelierCard(
             orientation="vertical",
-            spacing=12,
-            padding=[16, 16, 16, 16],
+            spacing=10,
+            padding=[16, 14, 16, 14],
             size_hint_y=None,
-            height=270
+            height=160
         )
 
-        lbl_sec = Label(
-            text="INFORMATIONS GÉNÉRALES",
-            font_size="10sp",
-            bold=True,
-            color=GOLD,
-            halign="left",
-            size_hint_y=None,
-            height=16
+        row_priority = BoxLayout(size_hint_y=None, height=26)
+        badge = AtelierBadge(text=t.get("priority", "MEDIUM"))
+        row_priority.add_widget(badge)
+
+        proj_name = t.get("project_title") or "Aucun projet"
+        lbl_proj = Label(
+            text=f"Projet: {proj_name}",
+            font_size="11sp",
+            color=theme.primary,
+            halign="left"
         )
-        lbl_sec.bind(size=lbl_sec.setter("text_size"))
-        card_main.add_widget(lbl_sec)
+        lbl_proj.bind(size=lbl_proj.setter("text_size"))
+        row_priority.add_widget(lbl_proj)
+        card_main.add_widget(row_priority)
 
         # Title Input
-        self.in_title = TextInput(
-            text=t.get("title", ""),
-            multiline=False,
-            background_color=BG_CARD_HOVER,
-            foreground_color=TEXT_PRIMARY,
-            cursor_color=GOLD,
-            padding=[12, 10, 12, 10],
+        self.in_title = ShadcnInput(
+            text=t["title"],
+            font_size="15sp",
             size_hint_y=None,
             height=42
         )
         card_main.add_widget(self.in_title)
 
         # Description Input
-        self.in_desc = TextInput(
-            text=t.get("description", ""),
-            multiline=True,
-            background_color=BG_CARD_HOVER,
-            foreground_color=TEXT_PRIMARY,
-            cursor_color=GOLD,
-            padding=[12, 8, 12, 8],
+        self.in_desc = ShadcnInput(
+            text=t.get("description") or "",
+            hint_text="Description de la tâche...",
             size_hint_y=None,
-            height=64
+            height=42
         )
         card_main.add_widget(self.in_desc)
-
-        # Priority & Project Row
-        row_p = BoxLayout(spacing=10, size_hint_y=None, height=42)
-        self.sp_priority = Spinner(
-            text=t.get("priority", "MEDIUM"),
-            values=("URGENT", "HIGH", "MEDIUM", "LOW"),
-            background_color=BG_CARD_HOVER,
-            color=GOLD,
-            size_hint_x=0.5
-        )
-        self.in_est_min = TextInput(
-            text=str(t.get("estimated_minutes", 30)),
-            hint_text="Est. min",
-            input_filter="int",
-            multiline=False,
-            background_color=BG_CARD_HOVER,
-            foreground_color=TEXT_PRIMARY,
-            size_hint_x=0.5
-        )
-        row_p.add_widget(self.sp_priority)
-        row_p.add_widget(self.in_est_min)
-        card_main.add_widget(row_p)
-
-        # Time Spent Row
-        lbl_time_spent = Label(
-            text=f"Temps réel passé : [b]{t.get('actual_minutes', 0)} min[/b]  ·  Statut : [b]{'Terminée ✓' if t.get('is_completed') else 'En cours'}[/b]",
-            markup=True,
-            font_size="12sp",
-            color=TEXT_SECONDARY,
-            halign="left",
-            size_hint_y=None,
-            height=20
-        )
-        lbl_time_spent.bind(size=lbl_time_spent.setter("text_size"))
-        card_main.add_widget(lbl_time_spent)
-
         self.content.add_widget(card_main)
 
-        # 2. Pomodoro Focus Quick Launch Card
-        focus_card = AtelierCard(
-            orientation="horizontal",
-            spacing=14,
-            padding=[16, 14, 16, 14],
-            size_hint_y=None,
-            height=70
-        )
-        col_f = BoxLayout(orientation="vertical", spacing=2)
-        lbl_f_title = Label(
-            text="SESSION FOCUS POMODORO",
-            font_size="10sp",
-            bold=True,
-            color=GOLD,
-            halign="left"
-        )
-        lbl_f_title.bind(size=lbl_f_title.setter("text_size"))
-        lbl_f_sub = Label(
-            text="Lancer 25 min de deep work lié à cette tâche",
-            font_size="12sp",
-            color=TEXT_PRIMARY,
-            halign="left"
-        )
-        lbl_f_sub.bind(size=lbl_f_sub.setter("text_size"))
-        col_f.add_widget(lbl_f_title)
-        col_f.add_widget(lbl_f_sub)
-        focus_card.add_widget(col_f)
-
-        btn_launch_f = AtelierButton(
-            text="Lancer ⏱",
-            font_size="12sp",
-            size_hint=(None, None),
-            size=(90, 40)
-        )
-        btn_launch_f.bind(on_release=self._launch_focus_for_task)
-        focus_card.add_widget(btn_launch_f)
-        self.content.add_widget(focus_card)
-
-        # 3. Subtasks Section Card
-        self.subtasks_card = AtelierCard(
+        # 2. Time & Metrics Card
+        card_time = AtelierCard(
             orientation="vertical",
             spacing=10,
-            padding=[16, 16, 16, 16],
-            size_hint_y=None
+            padding=[16, 14, 16, 14],
+            size_hint_y=None,
+            height=126
         )
-        lbl_sub_sec = Label(
-            text="SOUS-TÂCHES & JALONS",
+
+        lbl_t_head = Label(
+            text="ESTIMATION & SUIVI TEMPOREL",
             font_size="10sp",
             bold=True,
-            color=GOLD,
+            color=theme.text_secondary,
             halign="left",
             size_hint_y=None,
             height=16
         )
-        lbl_sub_sec.bind(size=lbl_sub_sec.setter("text_size"))
-        self.subtasks_card.add_widget(lbl_sub_sec)
+        lbl_t_head.bind(size=lbl_t_head.setter("text_size"))
+        card_time.add_widget(lbl_t_head)
 
-        subtasks = t.get("subtasks", [])
-        self.subtask_items = list(subtasks)
-        self.subtask_rows_container = BoxLayout(orientation="vertical", spacing=8, size_hint_y=None)
-        self.subtask_rows_container.bind(minimum_height=self.subtask_rows_container.setter("height"))
-        self._refresh_subtask_rows()
-        self.subtasks_card.add_widget(self.subtask_rows_container)
-
-        # Add subtask input row
-        row_add = BoxLayout(spacing=8, size_hint_y=None, height=40)
-        self.in_new_sub = TextInput(
-            hint_text="Ajouter une étape...",
-            multiline=False,
-            background_color=BG_CARD_HOVER,
-            foreground_color=TEXT_PRIMARY,
-            padding=[10, 8, 10, 8]
+        row_est = BoxLayout(spacing=10, size_hint_y=None, height=42)
+        lbl_est_label = Label(text="Durée estimée (min) :", font_size="12sp", color=theme.text_primary, size_hint_x=0.5, halign="left")
+        lbl_est_label.bind(size=lbl_est_label.setter("text_size"))
+        self.in_est = ShadcnInput(
+            text=str(t.get("estimated_minutes", 30)),
+            input_filter="int",
+            size_hint_x=0.5
         )
-        btn_add_sub = AtelierGhostButton(
-            text="+",
-            font_size="18sp",
+        row_est.add_widget(lbl_est_label)
+        row_est.add_widget(self.in_est)
+        card_time.add_widget(row_est)
+
+        st_label = "Terminée" if t.get("is_completed") else "En cours"
+        lbl_actual = Label(
+            text=f"Temps réel passé : [b]{t.get('actual_minutes', 0)} min[/b]  ·  Statut : [b]{st_label}[/b]",
+            markup=True,
+            font_size="12sp",
+            color=theme.text_secondary,
+            halign="left",
+            size_hint_y=None,
+            height=20
+        )
+        lbl_actual.bind(size=lbl_actual.setter("text_size"))
+        card_time.add_widget(lbl_actual)
+
+        self.content.add_widget(card_time)
+
+        # 3. Focus launcher
+        card_focus = AtelierCard(
+            orientation="horizontal",
+            spacing=10,
+            padding=[14, 10, 14, 10],
+            size_hint_y=None,
+            height=54
+        )
+        lbl_f = Label(
+            text="Lancer une session Pomodoro sur cette tâche",
+            font_size="12sp",
+            color=theme.text_primary,
+            halign="left"
+        )
+        lbl_f.bind(size=lbl_f.setter("text_size"))
+        card_focus.add_widget(lbl_f)
+
+        btn_go_focus = AtelierButton(
+            text="Lancer Focus",
+            font_size="11sp",
             size_hint=(None, None),
-            size=(40, 40)
+            size=(96, 34),
+            pos_hint={"center_y": 0.5}
         )
-        btn_add_sub.bind(on_release=self._add_subtask)
-        row_add.add_widget(self.in_new_sub)
-        row_add.add_widget(btn_add_sub)
-        self.subtasks_card.add_widget(row_add)
+        btn_go_focus.bind(on_release=lambda _: self._start_focus_for_task())
+        card_focus.add_widget(btn_go_focus)
+        self.content.add_widget(card_focus)
 
-        # dynamic height
-        self.subtasks_card.height = max(160, 80 + len(self.subtask_items) * 44 + 50)
-        self.content.add_widget(self.subtasks_card)
-
-        # 4. Action Buttons (Save / Toggle Completion)
-        row_actions = BoxLayout(spacing=12, size_hint_y=None, height=48)
-
-        btn_toggle = AtelierGhostButton(
-            text="Décocher" if t.get("is_completed") else "Marquer Terminée ✓",
-            text_color=SUCCESS if not t.get("is_completed") else TEXT_SECONDARY
+        # 4. Subtasks Section
+        subtasks = t.get("subtasks", [])
+        card_sub = AtelierCard(
+            orientation="vertical",
+            spacing=8,
+            padding=[16, 14, 16, 14],
+            size_hint_y=None
         )
-        btn_toggle.bind(on_release=self._toggle_completion)
+        lbl_sub_head = Label(
+            text="SOUS-TÂCHES & JALONS",
+            font_size="10sp",
+            bold=True,
+            color=theme.text_secondary,
+            halign="left",
+            size_hint_y=None,
+            height=16
+        )
+        lbl_sub_head.bind(size=lbl_sub_head.setter("text_size"))
+        card_sub.add_widget(lbl_sub_head)
 
-        btn_save = AtelierButton(text="Enregistrer")
-        btn_save.bind(on_release=self._save_changes)
-
-        row_actions.add_widget(btn_toggle)
-        row_actions.add_widget(btn_save)
-        self.content.add_widget(row_actions)
-
-    def _refresh_subtask_rows(self):
-        self.subtask_rows_container.clear_widgets()
-        for idx, sub in enumerate(self.subtask_items):
-            row = BoxLayout(spacing=10, size_hint_y=None, height=36)
-            cb = AtelierCheckbox(active=bool(sub.get("done")))
+        for idx, s in enumerate(subtasks):
+            s_row = BoxLayout(spacing=10, size_hint_y=None, height=28)
+            cb = AtelierCheckbox(active=bool(s.get("done")), size_box=18)
             cb.bind(on_release=lambda _, i=idx: self._toggle_subtask(i))
-            row.add_widget(cb)
+            s_row.add_widget(cb)
 
-            txt = f"[s]{sub.get('text', '')}[/s]" if sub.get("done") else sub.get("text", "")
-            lbl = Label(
+            txt = f"[s]{s['text']}[/s]" if s.get("done") else s["text"]
+            lbl_st = Label(
                 text=txt,
                 markup=True,
-                font_size="13sp",
-                color=TEXT_MUTED if sub.get("done") else TEXT_PRIMARY,
+                font_size="12sp",
+                color=theme.text_muted if s.get("done") else theme.text_primary,
                 halign="left"
             )
-            lbl.bind(size=lbl.setter("text_size"))
-            row.add_widget(lbl)
+            lbl_st.bind(size=lbl_st.setter("text_size"))
+            s_row.add_widget(lbl_st)
+            card_sub.add_widget(s_row)
 
-            btn_del = MDIconButton(
-                icon="close",
-                theme_icon_color="Custom",
-                icon_color=TEXT_MUTED,
-                size_hint=(None, None),
-                size=(32, 32)
-            )
-            btn_del.bind(on_release=lambda _, i=idx: self._del_subtask(i))
-            row.add_widget(btn_del)
-            self.subtask_rows_container.add_widget(row)
+        # Add subtask row
+        row_add_s = BoxLayout(spacing=8, size_hint_y=None, height=38)
+        self.in_new_sub = ShadcnInput(hint_text="Ajouter une sous-tâche...", size_hint_x=0.75)
+        btn_add_s = AtelierGhostButton(text="+", font_size="16sp", size_hint_x=0.25)
+        btn_add_s.bind(on_release=self._add_subtask)
+        row_add_s.add_widget(self.in_new_sub)
+        row_add_s.add_widget(btn_add_s)
+        card_sub.add_widget(row_add_s)
 
-    def _toggle_subtask(self, idx):
-        if 0 <= idx < len(self.subtask_items):
-            self.subtask_items[idx]["done"] = not self.subtask_items[idx].get("done")
-            self._save_subtasks()
-            self._refresh_subtask_rows()
+        card_sub.height = 70 + len(subtasks) * 32
+        self.content.add_widget(card_sub)
 
-    def _del_subtask(self, idx):
-        if 0 <= idx < len(self.subtask_items):
-            self.subtask_items.pop(idx)
-            self._save_subtasks()
-            self._refresh_subtask_rows()
-            self.subtasks_card.height = max(160, 80 + len(self.subtask_items) * 44 + 50)
+        # 5. Bottom Action Buttons
+        btn_row = BoxLayout(spacing=10, size_hint_y=None, height=44)
+        btn_save = AtelierButton(text="Sauvegarder", size_hint_x=0.5)
+        btn_save.bind(on_release=self._save_changes)
 
-    def _add_subtask(self, *args):
-        txt = self.in_new_sub.text.strip()
-        if txt:
-            self.subtask_items.append({"text": txt, "done": False})
-            self.in_new_sub.text = ""
-            self._save_subtasks()
-            self._refresh_subtask_rows()
-            self.subtasks_card.height = max(160, 80 + len(self.subtask_items) * 44 + 50)
+        toggle_label = "Décocher" if t.get("is_completed") else "Marquer Terminée"
+        btn_toggle = AtelierGhostButton(text=toggle_label, size_hint_x=0.5)
+        btn_toggle.bind(on_release=self._toggle_completion)
 
-    def _save_subtasks(self):
-        if self.task_id:
-            ds.tasks.update_task(self.task_id, subtasks=self.subtask_items)
+        btn_row.add_widget(btn_save)
+        btn_row.add_widget(btn_toggle)
+        self.content.add_widget(btn_row)
 
     def _save_changes(self, *args):
-        if not self.task_id:
-            return
-        title = self.in_title.text.strip()
-        desc = self.in_desc.text.strip()
-        priority = self.sp_priority.text
         try:
-            est_min = int(self.in_est_min.text.strip() or 30)
+            mins = int(self.in_est.text.strip() or 30)
         except ValueError:
-            est_min = 30
-
+            mins = 30
         ds.tasks.update_task(
             self.task_id,
-            title=title,
-            description=desc,
-            priority=priority,
-            estimated_minutes=est_min,
-            subtasks=self.subtask_items
+            title=self.in_title.text.strip() or self.task_data["title"],
+            description=self.in_desc.text.strip(),
+            estimated_minutes=mins
         )
-        self._go_back()
 
     def _toggle_completion(self, *args):
-        if self.task_id:
-            ds.tasks.toggle_task(self.task_id)
-            self.load_task(self.task_id)
+        ds.tasks.toggle_task(self.task_id)
 
     def _delete_current_task(self):
         if self.task_id:
             ds.tasks.delete_task(self.task_id)
             self._go_back()
 
-    def _launch_focus_for_task(self, *args):
-        if self.manager and "focus" in self.manager.screen_names and self.task_data:
-            focus_screen = self.manager.get_screen("focus")
-            focus_screen.setup_focus_session(
-                task_id=self.task_id,
-                title=self.task_data.get("title", "Focus Session")
-            )
+    def _toggle_subtask(self, idx):
+        subtasks = list(self.task_data.get("subtasks", []))
+        if 0 <= idx < len(subtasks):
+            subtasks[idx]["done"] = not subtasks[idx].get("done", False)
+            ds.tasks.update_task(self.task_id, subtasks=subtasks)
+
+    def _add_subtask(self, *args):
+        text = self.in_new_sub.text.strip()
+        if not text:
+            return
+        subtasks = list(self.task_data.get("subtasks", []))
+        subtasks.append({"text": text, "done": False})
+        ds.tasks.update_task(self.task_id, subtasks=subtasks)
+        self.in_new_sub.text = ""
+
+    def _start_focus_for_task(self):
+        if self.manager and "focus" in self.manager.screen_names:
             self.manager.current = "focus"

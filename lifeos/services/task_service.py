@@ -11,7 +11,8 @@ class TaskService:
         self,
         filter_status: Optional[str] = None, # "all", "today", "urgent", "completed", "pending"
         project_id: Optional[int] = None,
-        search_query: Optional[str] = None
+        search_query: Optional[str] = None,
+        search: Optional[str] = None
     ) -> List[Dict[str, Any]]:
         conn = get_connection()
         query = """
@@ -21,6 +22,8 @@ class TaskService:
             WHERE 1=1
         """
         params = []
+
+        q = search_query or search
 
         if project_id is not None:
             query += " AND t.project_id = ?"
@@ -37,9 +40,9 @@ class TaskService:
         elif filter_status == "pending":
             query += " AND t.is_completed = 0"
 
-        if search_query:
+        if q:
             query += " AND (t.title LIKE ? OR t.description LIKE ?)"
-            params.extend([f"%{search_query}%", f"%{search_query}%"])
+            params.extend([f"%{q}%", f"%{q}%"])
 
         # Order by completed asc, priority rank, due_date
         query += """

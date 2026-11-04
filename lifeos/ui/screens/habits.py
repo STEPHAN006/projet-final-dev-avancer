@@ -1,4 +1,4 @@
-"""Habits Tracking Screen for LifeOS (Daily Routines & Discipline)."""
+"""Habits Tracking Screen for LifeOS (Shadcn / React Native style)."""
 
 from datetime import date, timedelta
 from kivy.uix.screenmanager import Screen
@@ -6,12 +6,9 @@ from kivy.uix.boxlayout import BoxLayout
 from kivy.uix.gridlayout import GridLayout
 from kivy.uix.scrollview import ScrollView
 from kivy.uix.label import Label
-from kivy.graphics import Color, Rectangle, RoundedRectangle, Line, Ellipse
+from kivy.graphics import Color, Rectangle, RoundedRectangle, Line
 from kivymd.uix.button import MDIconButton
-from lifeos.ui.theme import (
-    BG_CANVAS, BG_CARD, BG_CARD_HOVER, BORDER_COLOR,
-    GOLD, CHAMPAGNE, TEXT_PRIMARY, TEXT_SECONDARY, TEXT_MUTED, SUCCESS, WARNING
-)
+from lifeos.ui.theme import theme
 from lifeos.ui.components.card import AtelierCard
 from lifeos.ui.components.buttons import AtelierButton, AtelierGhostButton, AtelierBadge
 from lifeos.ui.components.checkbox import AtelierCheckbox
@@ -33,37 +30,39 @@ class HabitWeekDots(BoxLayout):
         for i, day in enumerate(days_data):
             d_box = BoxLayout(orientation="vertical", spacing=2, size_hint_x=1.0)
 
-            # Day letter
             lbl_l = Label(
                 text=day_letters[i % 7],
-                font_size="9sp",
+                font_size="10sp",
                 bold=True,
-                color=TEXT_MUTED if not day["done"] else GOLD,
+                color=theme.primary if day["done"] else theme.text_muted,
                 size_hint_y=0.45
             )
             d_box.add_widget(lbl_l)
 
-            # Dot indicator
             dot = BoxLayout(size_hint=(None, None), size=(18, 18), pos_hint={"center_x": 0.5})
             is_done = day["done"]
 
             with dot.canvas:
                 if is_done:
-                    Color(rgba=GOLD)
+                    Color(rgba=theme.primary)
                     RoundedRectangle(pos=dot.pos, size=dot.size, radius=[4])
                 else:
-                    Color(rgba=BORDER_COLOR)
-                    Line(rounded_rectangle=(dot.x, dot.y, dot.width, dot.height, 4), width=1.1)
+                    Color(rgba=theme.bg_muted)
+                    RoundedRectangle(pos=dot.pos, size=dot.size, radius=[4])
+                    Color(rgba=theme.border)
+                    Line(rounded_rectangle=(dot.x, dot.y, dot.width, dot.height, 4), width=1.0)
 
             def _update_dot(inst, *args, done=is_done):
                 inst.canvas.clear()
                 with inst.canvas:
                     if done:
-                        Color(rgba=GOLD)
+                        Color(rgba=theme.primary)
                         RoundedRectangle(pos=inst.pos, size=inst.size, radius=[4])
                     else:
-                        Color(rgba=BORDER_COLOR)
-                        Line(rounded_rectangle=(inst.x, inst.y, inst.width, inst.height, 4), width=1.1)
+                        Color(rgba=theme.bg_muted)
+                        RoundedRectangle(pos=inst.pos, size=inst.size, radius=[4])
+                        Color(rgba=theme.border)
+                        Line(rounded_rectangle=(inst.x, inst.y, inst.width, inst.height, 4), width=1.0)
 
             dot.bind(pos=_update_dot, size=_update_dot)
             d_box.add_widget(dot)
@@ -74,7 +73,7 @@ class HabitCard(AtelierCard):
     def __init__(self, habit, on_toggle=None, on_delete=None, **kwargs):
         kwargs.setdefault("orientation", "vertical")
         kwargs.setdefault("spacing", 10)
-        kwargs.setdefault("padding", [14, 12, 14, 12])
+        kwargs.setdefault("padding", [16, 12, 16, 12])
         kwargs.setdefault("size_hint_y", None)
         kwargs.setdefault("height", 132)
         super().__init__(**kwargs)
@@ -95,15 +94,15 @@ class HabitCard(AtelierCard):
             text=habit["name"],
             font_size="14sp",
             bold=True,
-            color=TEXT_PRIMARY,
+            color=theme.text_primary,
             halign="left"
         )
         lbl_name.bind(size=lbl_name.setter("text_size"))
 
         lbl_desc = Label(
             text=f"{habit.get('frequency', 'Quotidien')}  ·  {habit.get('description', '')[:35]}",
-            font_size="10sp",
-            color=TEXT_SECONDARY,
+            font_size="11sp",
+            color=theme.text_secondary,
             halign="left"
         )
         lbl_desc.bind(size=lbl_desc.setter("text_size"))
@@ -114,17 +113,15 @@ class HabitCard(AtelierCard):
 
         # Streak pill
         streak_badge = AtelierBadge(
-            text=f"{habit.get('streak_current', 0)}j 🔥",
-            badge_color=GOLD
+            text=f"{habit.get('streak_current', 0)}j"
         )
         header_row.add_widget(streak_badge)
 
-        # Delete icon
         if on_delete:
             btn_del = MDIconButton(
                 icon="delete-outline",
                 theme_icon_color="Custom",
-                icon_color=TEXT_MUTED,
+                icon_color=theme.text_muted,
                 size_hint=(None, None),
                 size=(32, 32),
                 pos_hint={"center_y": 0.5}
@@ -141,9 +138,9 @@ class HabitCard(AtelierCard):
         # Bottom info row
         bot_row = BoxLayout(size_hint_y=None, height=18)
         lbl_max = Label(
-            text=f"Record: {habit.get('streak_best', 0)} jours consécutifs",
-            font_size="10sp",
-            color=TEXT_MUTED,
+            text=f"Record : {habit.get('streak_best', 0)} jours consécutifs",
+            font_size="11sp",
+            color=theme.text_secondary,
             halign="left"
         )
         lbl_max.bind(size=lbl_max.setter("text_size"))
@@ -159,7 +156,7 @@ class HabitsScreen(Screen):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         with self.canvas.before:
-            Color(rgba=BG_CANVAS)
+            self._bg_col = Color(rgba=theme.bg_canvas)
             self._bg = Rectangle(pos=self.pos, size=self.size)
         self.bind(pos=self._update_bg, size=self._update_bg)
 
@@ -196,7 +193,12 @@ class HabitsScreen(Screen):
         self.add_widget(self.root_box)
 
         bus.subscribe("habits_updated", lambda *_: self.refresh_habits())
+        bus.subscribe("theme_changed", self._on_theme)
 
+        self.refresh_habits()
+
+    def _on_theme(self, *args, **kwargs):
+        self._bg_col.rgba = theme.bg_canvas
         self.refresh_habits()
 
     def _update_bg(self, *args):
@@ -229,7 +231,7 @@ class HabitsScreen(Screen):
         kpi_card = AtelierCard(
             orientation="vertical",
             spacing=10,
-            padding=[14, 12, 14, 12],
+            padding=[16, 14, 16, 14],
             size_hint_y=None,
             height=86
         )
@@ -237,7 +239,7 @@ class HabitsScreen(Screen):
             text="BILAN DU PROTOCOLE QUOTIDIEN",
             font_size="10sp",
             bold=True,
-            color=GOLD,
+            color=theme.text_secondary,
             halign="left",
             size_hint_y=None,
             height=16
@@ -247,16 +249,16 @@ class HabitsScreen(Screen):
 
         grid = GridLayout(cols=3, spacing=10, size_hint_y=None, height=44)
         c1 = BoxLayout(orientation="vertical")
-        c1.add_widget(Label(text=f"{success_pct}%", font_size="18sp", bold=True, color=TEXT_PRIMARY))
-        c1.add_widget(Label(text="Taux Aujourd'hui", font_size="10sp", color=TEXT_SECONDARY))
+        c1.add_widget(Label(text=f"{success_pct}%", font_size="18sp", bold=True, color=theme.text_primary))
+        c1.add_widget(Label(text="Taux Aujourd'hui", font_size="10sp", color=theme.text_secondary))
 
         c2 = BoxLayout(orientation="vertical")
-        c2.add_widget(Label(text=f"{done_today}/{total}", font_size="18sp", bold=True, color=GOLD))
-        c2.add_widget(Label(text="Actives Validées", font_size="10sp", color=TEXT_SECONDARY))
+        c2.add_widget(Label(text=f"{done_today}/{total}", font_size="18sp", bold=True, color=theme.primary))
+        c2.add_widget(Label(text="Actives Validées", font_size="10sp", color=theme.text_secondary))
 
         c3 = BoxLayout(orientation="vertical")
-        c3.add_widget(Label(text=f"{best_streak}j", font_size="18sp", bold=True, color=CHAMPAGNE))
-        c3.add_widget(Label(text="Record Série", font_size="10sp", color=TEXT_SECONDARY))
+        c3.add_widget(Label(text=f"{best_streak}j", font_size="18sp", bold=True, color=theme.text_primary))
+        c3.add_widget(Label(text="Record Série", font_size="10sp", color=theme.text_secondary))
 
         grid.add_widget(c1)
         grid.add_widget(c2)
@@ -269,7 +271,7 @@ class HabitsScreen(Screen):
             text=f"RITUELS & HABITUDES ({total})",
             font_size="11sp",
             bold=True,
-            color=GOLD,
+            color=theme.text_secondary,
             halign="left",
             size_hint_y=None,
             height=20
@@ -285,11 +287,10 @@ class HabitsScreen(Screen):
             )
             self.content.add_widget(card)
 
-        # Action button to add habit
         btn_add = AtelierGhostButton(
             text="+ Créer une nouvelle routine",
             size_hint_y=None,
-            height=44
+            height=42
         )
         btn_add.bind(on_release=lambda _: self._open_add_dialog())
         self.content.add_widget(btn_add)

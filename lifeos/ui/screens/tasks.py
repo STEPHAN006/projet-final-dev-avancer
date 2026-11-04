@@ -1,21 +1,18 @@
-"""Tasks Management Screen for LifeOS."""
+"""Tasks Management Screen for LifeOS (Shadcn / React Native style)."""
 
 from kivy.uix.screenmanager import Screen
 from kivy.uix.boxlayout import BoxLayout
 from kivy.uix.scrollview import ScrollView
 from kivy.uix.label import Label
-from kivy.uix.textinput import TextInput
 from kivy.graphics import Color, Rectangle
 from kivymd.uix.button import MDIconButton
-from lifeos.ui.theme import (
-    BG_CANVAS, BG_CARD, BG_CARD_HOVER, BORDER_COLOR,
-    GOLD, CHAMPAGNE, TEXT_PRIMARY, TEXT_SECONDARY, TEXT_MUTED
-)
+from kivymd.uix.label import MDIcon
+from lifeos.ui.theme import theme
 from lifeos.ui.components.card import AtelierCard
 from lifeos.ui.components.buttons import AtelierButton, AtelierGhostButton, AtelierBadge
 from lifeos.ui.components.checkbox import AtelierCheckbox
 from lifeos.ui.components.navigation import AtelierTopBar, AtelierBottomNav
-from lifeos.ui.components.dialogs import AddTaskDialog
+from lifeos.ui.components.dialogs import AddTaskDialog, ShadcnInput
 from lifeos.services.data_service import ds
 from lifeos.core.events import bus
 
@@ -26,7 +23,7 @@ class TasksScreen(Screen):
         self.search_query = ""
 
         with self.canvas.before:
-            Color(rgba=BG_CANVAS)
+            self._bg_col = Color(rgba=theme.bg_canvas)
             self._bg = Rectangle(pos=self.pos, size=self.size)
         self.bind(pos=self._update_bg, size=self._update_bg)
 
@@ -42,56 +39,57 @@ class TasksScreen(Screen):
         self.root_box.add_widget(self.top_bar)
 
         # Search Bar & Filter Tabs
-        header_ctrls = BoxLayout(orientation="vertical", spacing=8, padding=[16, 12, 16, 6], size_hint_y=None, height=92)
+        header_ctrls = BoxLayout(orientation="vertical", spacing=8, padding=[16, 10, 16, 6], size_hint_y=None, height=92)
 
-        # Search input
-        self.search_input = TextInput(
+        # Shadcn search input
+        self.search_input = ShadcnInput(
             hint_text="Rechercher une tâche...",
-            multiline=False,
-            background_color=BG_CARD,
-            foreground_color=TEXT_PRIMARY,
-            cursor_color=GOLD,
-            padding=[12, 8, 12, 8],
             size_hint_y=None,
-            height=38
+            height=40
         )
         self.search_input.bind(text=self._on_search)
         header_ctrls.add_widget(self.search_input)
 
-        # Filter Pills Scroll
-        pill_scroll = ScrollView(size_hint_y=None, height=34, do_scroll_y=False)
-        self.pill_box = BoxLayout(orientation="horizontal", spacing=6, size_hint_x=None)
-        self.pill_box.bind(minimum_width=self.pill_box.setter("width"))
+        # Filter tabs
+        self.tabs_scroll = ScrollView(size_hint=(1, None), height=34, do_scroll_y=False)
+        self.tabs_box = BoxLayout(spacing=6, size_hint_x=None, padding=[2, 0, 2, 0])
+        self.tabs_box.bind(minimum_width=self.tabs_box.setter("width"))
 
-        self.filters = [
+        self.filter_buttons = {}
+        filters = [
             ("all", "Toutes"),
             ("today", "Aujourd'hui"),
             ("urgent", "Urgentes"),
             ("pending", "En cours"),
-            ("completed", "Terminées")
+            ("completed", "Terminées"),
         ]
-        self.pill_buttons = {}
-        for code, label in self.filters:
-            btn = AtelierGhostButton(
+
+        for key, label in filters:
+            btn = AtelierButton(
                 text=label,
                 font_size="11sp",
                 size_hint=(None, None),
-                size=(90, 30)
+                size=(88, 32)
+            ) if key == self.current_filter else AtelierGhostButton(
+                text=label,
+                font_size="11sp",
+                size_hint=(None, None),
+                size=(88, 32)
             )
-            btn.bind(on_release=lambda x, c=code: self._set_filter(c))
-            self.pill_buttons[code] = btn
-            self.pill_box.add_widget(btn)
+            btn.bind(on_release=lambda inst, k=key: self._set_filter(k))
+            self.filter_buttons[key] = btn
+            self.tabs_box.add_widget(btn)
 
-        pill_scroll.add_widget(self.pill_box)
-        header_ctrls.add_widget(pill_scroll)
+        self.tabs_scroll.add_widget(self.tabs_box)
+        header_ctrls.add_widget(self.tabs_scroll)
         self.root_box.add_widget(header_ctrls)
 
-        # Tasks List Scroll
+        # Tasks List ScrollView
         self.scroll = ScrollView(size_hint=(1, 1), do_scroll_x=False)
         self.tasks_container = BoxLayout(
             orientation="vertical",
             spacing=10,
-            padding=[16, 6, 16, 16],
+            padding=[16, 8, 16, 20],
             size_hint_y=None
         )
         self.tasks_container.bind(minimum_height=self.tasks_container.setter("height"))
@@ -107,10 +105,14 @@ class TasksScreen(Screen):
 
         self.add_widget(self.root_box)
 
-        # Bus subscriber
         bus.subscribe("tasks_updated", lambda *_: self.refresh_tasks())
+        bus.subscribe("theme_changed", self._on_theme)
 
-        self._update_pills_visual()
+        self.refresh_tasks()
+
+    def _on_theme(self, *args, **kwargs):
+        self._bg_col.rgba = theme.bg_canvas
+        self._update_tabs_ui()
         self.refresh_tasks()
 
     def _update_bg(self, *args):
@@ -133,45 +135,53 @@ class TasksScreen(Screen):
         self.search_query = val.strip()
         self.refresh_tasks()
 
-    def _set_filter(self, filter_code):
-        self.current_filter = filter_code
-        self._update_pills_visual()
+    def _set_filter(self, key):
+        self.current_filter = key
+        self._update_tabs_ui()
         self.refresh_tasks()
 
-    def _update_pills_visual(self):
-        for code, btn in self.pill_buttons.items():
-            if code == self.current_filter:
-                btn.border_color = GOLD
-                btn.text_color = GOLD
+    def _update_tabs_ui(self):
+        self.tabs_box.clear_widgets()
+        filters = [
+            ("all", "Toutes"),
+            ("today", "Aujourd'hui"),
+            ("urgent", "Urgentes"),
+            ("pending", "En cours"),
+            ("completed", "Terminées"),
+        ]
+        for key, label in filters:
+            if key == self.current_filter:
+                btn = AtelierButton(text=label, font_size="11sp", size_hint=(None, None), size=(88, 32))
             else:
-                btn.border_color = BORDER_COLOR
-                btn.text_color = TEXT_SECONDARY
+                btn = AtelierGhostButton(text=label, font_size="11sp", size_hint=(None, None), size=(88, 32))
+            btn.bind(on_release=lambda inst, k=key: self._set_filter(k))
+            self.tabs_box.add_widget(btn)
 
     def refresh_tasks(self):
         self.tasks_container.clear_widgets()
 
         tasks = ds.tasks.list_tasks(
             filter_status=self.current_filter,
-            search_query=self.search_query
+            search=self.search_query
         )
 
         if not tasks:
-            empty_lbl = Label(
-                text="Aucune tâche dans cette vue.\nUtilisez le bouton '+' pour en créer une.",
+            empty_box = BoxLayout(orientation="vertical", spacing=8, size_hint_y=None, height=140)
+            lbl_empty = Label(
+                text="Aucune tâche dans cette section.",
                 font_size="13sp",
-                color=TEXT_MUTED,
-                halign="center",
-                size_hint_y=None,
-                height=100
+                color=theme.text_muted,
+                halign="center"
             )
-            self.tasks_container.add_widget(empty_lbl)
+            empty_box.add_widget(lbl_empty)
+            self.tasks_container.add_widget(empty_box)
             return
 
         for t in tasks:
             card = AtelierCard(
                 orientation="horizontal",
                 spacing=12,
-                padding=[12, 10, 12, 10],
+                padding=[14, 12, 14, 12],
                 size_hint_y=None,
                 height=72
             )
@@ -189,35 +199,34 @@ class TasksScreen(Screen):
                 markup=True,
                 font_size="13sp",
                 bold=True,
-                color=TEXT_MUTED if t["is_completed"] else TEXT_PRIMARY,
+                color=theme.text_muted if t["is_completed"] else theme.text_primary,
                 halign="left",
                 size_hint_y=None,
                 height=22
             )
             lbl_title.bind(size=lbl_title.setter("text_size"))
 
-            # Meta Row
-            meta = BoxLayout(spacing=8, size_hint_y=None, height=18)
+            # Meta Row without broken emojis
+            meta = BoxLayout(spacing=10, size_hint_y=None, height=18)
             proj = t.get("project_title") or "Général"
             lbl_proj = Label(
-                text=f"📁 {proj}",
-                font_size="10sp",
-                color=CHAMPAGNE,
+                text=f"Projet: {proj}",
+                font_size="11sp",
+                color=theme.primary,
                 halign="left"
             )
             lbl_proj.bind(size=lbl_proj.setter("text_size"))
 
-            # Subtasks count
             subtasks = t.get("subtasks", [])
             sub_text = ""
             if subtasks:
                 done_sub = sum(1 for s in subtasks if s.get("done"))
-                sub_text = f"· ✓ {done_sub}/{len(subtasks)}"
+                sub_text = f" · {done_sub}/{len(subtasks)} sous-tâches"
 
             lbl_time = Label(
-                text=f"⏱ {t.get('estimated_minutes', 30)}m {sub_text}",
-                font_size="10sp",
-                color=TEXT_SECONDARY,
+                text=f"{t.get('estimated_minutes', 30)} min{sub_text}",
+                font_size="11sp",
+                color=theme.text_secondary,
                 halign="left"
             )
             lbl_time.bind(size=lbl_time.setter("text_size"))

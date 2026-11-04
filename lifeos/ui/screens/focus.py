@@ -1,4 +1,4 @@
-"""Focus & Pomodoro Screen for LifeOS (Deep Work Sanctuary)."""
+"""Focus & Pomodoro Screen for LifeOS (Shadcn / React Native style)."""
 
 from datetime import date
 from kivy.clock import Clock
@@ -7,17 +7,14 @@ from kivy.uix.boxlayout import BoxLayout
 from kivy.uix.gridlayout import GridLayout
 from kivy.uix.scrollview import ScrollView
 from kivy.uix.label import Label
-from kivy.uix.spinner import Spinner
-from kivy.graphics import Color, Rectangle, RoundedRectangle, Line, Ellipse
+from kivy.graphics import Color, Rectangle
 from kivymd.uix.button import MDIconButton
-from lifeos.ui.theme import (
-    BG_CANVAS, BG_CARD, BG_CARD_HOVER, BORDER_COLOR,
-    GOLD, CHAMPAGNE, TEXT_PRIMARY, TEXT_SECONDARY, TEXT_MUTED, SUCCESS, WARNING, ERROR
-)
+from lifeos.ui.theme import theme
 from lifeos.ui.components.card import AtelierCard
 from lifeos.ui.components.buttons import AtelierButton, AtelierGhostButton, AtelierBadge
 from lifeos.ui.components.progress import AtelierProgressBar
 from lifeos.ui.components.navigation import AtelierTopBar, AtelierBottomNav
+from lifeos.ui.components.dialogs import ShadcnSelect
 from lifeos.services.data_service import ds
 from lifeos.core.events import bus
 
@@ -25,8 +22,7 @@ class FocusScreen(Screen):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
 
-        # Timer states
-        self.mode = "pomodoro" # pomodoro (25m), short_break (5m), long_break (15m), stopwatch
+        self.mode = "pomodoro"
         self.preset_seconds = 25 * 60
         self.remaining_seconds = 25 * 60
         self.is_running = False
@@ -35,7 +31,7 @@ class FocusScreen(Screen):
         self.timer_event = None
 
         with self.canvas.before:
-            Color(rgba=BG_CANVAS)
+            self._bg_col = Color(rgba=theme.bg_canvas)
             self._bg = Rectangle(pos=self.pos, size=self.size)
         self.bind(pos=self._update_bg, size=self._update_bg)
 
@@ -71,6 +67,11 @@ class FocusScreen(Screen):
 
         self._build_ui()
         bus.subscribe("focus_updated", lambda *_: self._refresh_stats())
+        bus.subscribe("theme_changed", self._on_theme)
+
+    def _on_theme(self, *args, **kwargs):
+        self._bg_col.rgba = theme.bg_canvas
+        self._build_ui()
 
     def _update_bg(self, *args):
         self._bg.pos = self.pos
@@ -121,7 +122,7 @@ class FocusScreen(Screen):
             text=f"Cycle {self.current_cycle} sur {self.max_cycles} · Deep Work",
             font_size="11sp",
             bold=True,
-            color=GOLD,
+            color=theme.primary,
             halign="center",
             size_hint_y=None,
             height=20
@@ -132,7 +133,7 @@ class FocusScreen(Screen):
             text=self._format_time(self.remaining_seconds),
             font_size="48sp",
             bold=True,
-            color=TEXT_PRIMARY,
+            color=theme.text_primary,
             halign="center",
             size_hint_y=None,
             height=70
@@ -142,20 +143,20 @@ class FocusScreen(Screen):
         self.prog_timer = AtelierProgressBar(value=100, size_hint_y=None, height=6)
         timer_card.add_widget(self.prog_timer)
 
-        # Controls Row (Reset, Start/Pause, Finish)
+        # Controls Row
         ctrl_row = BoxLayout(spacing=12, size_hint_y=None, height=44)
-        btn_reset = AtelierGhostButton(text="↺ Réinitialiser", font_size="12sp", size_hint_x=0.35)
+        btn_reset = AtelierGhostButton(text="Réinitialiser", font_size="12sp", size_hint_x=0.35)
         btn_reset.bind(on_release=lambda _: self._reset_timer())
 
+        btn_text = "Pause" if self.is_running else "Démarrer"
         self.btn_toggle = AtelierButton(
-            text="▶ Démarrer",
+            text=btn_text,
             font_size="13sp",
-            size_hint_x=0.45,
-            bg_color=GOLD
+            size_hint_x=0.45
         )
         self.btn_toggle.bind(on_release=lambda _: self._toggle_timer())
 
-        btn_log = AtelierGhostButton(text="✓ Valider", font_size="12sp", size_hint_x=0.25)
+        btn_log = AtelierGhostButton(text="Valider", font_size="12sp", size_hint_x=0.25)
         btn_log.bind(on_release=lambda _: self._finish_session(manual=True))
 
         ctrl_row.add_widget(btn_reset)
@@ -169,7 +170,7 @@ class FocusScreen(Screen):
         ctx_card = AtelierCard(
             orientation="vertical",
             spacing=8,
-            padding=[14, 12, 14, 12],
+            padding=[16, 12, 16, 12],
             size_hint_y=None,
             height=90
         )
@@ -177,7 +178,7 @@ class FocusScreen(Screen):
             text="CONTEXTE D'ANCRAGE & TÂCHE LIÉE",
             font_size="10sp",
             bold=True,
-            color=GOLD,
+            color=theme.text_secondary,
             halign="left",
             size_hint_y=None,
             height=16
@@ -190,11 +191,9 @@ class FocusScreen(Screen):
         self.task_map["Session Libre (Générale)"] = None
         task_choices = list(self.task_map.keys())
 
-        self.sp_task = Spinner(
+        self.sp_task = ShadcnSelect(
             text=task_choices[0],
             values=task_choices,
-            background_color=BG_CARD_HOVER,
-            color=TEXT_PRIMARY,
             size_hint_y=None,
             height=40
         )
@@ -232,7 +231,7 @@ class FocusScreen(Screen):
         self.remaining_seconds = self.preset_seconds
         self.lbl_timer.text = self._format_time(self.remaining_seconds)
         self.prog_timer.value = 100
-        self.btn_toggle.text = "▶ Démarrer"
+        self.btn_toggle.text = "Démarrer"
         self._build_ui()
 
     def _toggle_timer(self):
@@ -243,13 +242,13 @@ class FocusScreen(Screen):
 
     def _start_timer(self):
         self.is_running = True
-        self.btn_toggle.text = "⏸ Pause"
+        self.btn_toggle.text = "Pause"
         if not self.timer_event:
             self.timer_event = Clock.schedule_interval(self._tick, 1.0)
 
     def _pause_timer(self):
         self.is_running = False
-        self.btn_toggle.text = "▶ Reprendre"
+        self.btn_toggle.text = "Reprendre"
         self._stop_ticker()
 
     def _stop_ticker(self):
@@ -263,7 +262,7 @@ class FocusScreen(Screen):
         self.remaining_seconds = self.preset_seconds
         self.lbl_timer.text = self._format_time(self.remaining_seconds)
         self.prog_timer.value = 100
-        self.btn_toggle.text = "▶ Démarrer"
+        self.btn_toggle.text = "Démarrer"
 
     def _tick(self, dt):
         if self.mode == "stopwatch":
@@ -289,7 +288,6 @@ class FocusScreen(Screen):
             elapsed = self.preset_seconds - self.remaining_seconds
             duration = max(1, elapsed // 60) if manual else (self.preset_seconds // 60)
 
-        # Log session to database
         task_id = self.task_map.get(self.sp_task.text) if hasattr(self, "sp_task") else None
         title = self.sp_task.text if hasattr(self, "sp_task") else "Focus Pomodoro"
         ds.focus.log_session(
@@ -316,15 +314,15 @@ class FocusScreen(Screen):
         kpi_card = AtelierCard(
             orientation="vertical",
             spacing=8,
-            padding=[14, 12, 14, 12],
+            padding=[16, 12, 16, 12],
             size_hint_y=None,
             height=86
         )
         lbl_k_head = Label(
-            text="STATISTIQUES DU JOUR  ·  OBJECTIF 4H",
+            text="STATISTIQUES DU JOUR · OBJECTIF 4H",
             font_size="10sp",
             bold=True,
-            color=GOLD,
+            color=theme.text_secondary,
             halign="left",
             size_hint_y=None,
             height=16
@@ -334,18 +332,17 @@ class FocusScreen(Screen):
 
         grid = GridLayout(cols=3, spacing=10, size_hint_y=1)
         c1 = BoxLayout(orientation="vertical")
-        c1.add_widget(Label(text=formatted, font_size="18sp", bold=True, color=TEXT_PRIMARY))
-        c1.add_widget(Label(text="Durée Totale", font_size="10sp", color=TEXT_SECONDARY))
+        c1.add_widget(Label(text=formatted, font_size="18sp", bold=True, color=theme.text_primary))
+        c1.add_widget(Label(text="Durée Totale", font_size="10sp", color=theme.text_secondary))
 
         c2 = BoxLayout(orientation="vertical")
-        c2.add_widget(Label(text=f"{count}", font_size="18sp", bold=True, color=GOLD))
-        c2.add_widget(Label(text="Sessions Finies", font_size="10sp", color=TEXT_SECONDARY))
+        c2.add_widget(Label(text=f"{count}", font_size="18sp", bold=True, color=theme.primary))
+        c2.add_widget(Label(text="Sessions Finies", font_size="10sp", color=theme.text_secondary))
 
-        # Goal completion % (4h = 240 mins)
         comp_pct = min(100, int((total_m / 240.0) * 100))
         c3 = BoxLayout(orientation="vertical")
-        c3.add_widget(Label(text=f"{comp_pct}%", font_size="18sp", bold=True, color=CHAMPAGNE))
-        c3.add_widget(Label(text="Complétion", font_size="10sp", color=TEXT_SECONDARY))
+        c3.add_widget(Label(text=f"{comp_pct}%", font_size="18sp", bold=True, color=theme.text_primary))
+        c3.add_widget(Label(text="Complétion", font_size="10sp", color=theme.text_secondary))
 
         grid.add_widget(c1)
         grid.add_widget(c2)
@@ -360,7 +357,7 @@ class FocusScreen(Screen):
                 text="SESSIONS RÉCENTES",
                 font_size="11sp",
                 bold=True,
-                color=GOLD,
+                color=theme.text_secondary,
                 halign="left",
                 size_hint_y=None,
                 height=22
@@ -377,15 +374,15 @@ class FocusScreen(Screen):
                     height=52
                 )
                 txt_b = BoxLayout(orientation="vertical", spacing=2)
-                t_lbl = Label(text=s["title"][:30], font_size="13sp", bold=True, color=TEXT_PRIMARY, halign="left")
+                t_lbl = Label(text=s["title"][:30], font_size="13sp", bold=True, color=theme.text_primary, halign="left")
                 t_lbl.bind(size=t_lbl.setter("text_size"))
                 time_str = s.get("completed_at", "")[11:16]
-                m_lbl = Label(text=f"{s.get('mode', 'pomodoro').upper()}  ·  {time_str}", font_size="10sp", color=TEXT_SECONDARY, halign="left")
+                m_lbl = Label(text=f"{s.get('mode', 'pomodoro').upper()} · {time_str}", font_size="10sp", color=theme.text_secondary, halign="left")
                 m_lbl.bind(size=m_lbl.setter("text_size"))
                 txt_b.add_widget(t_lbl)
                 txt_b.add_widget(m_lbl)
                 r_card.add_widget(txt_b)
 
-                badge = AtelierBadge(text=f"{s['duration_minutes']} min", badge_color=GOLD)
+                badge = AtelierBadge(text=f"{s['duration_minutes']} min")
                 r_card.add_widget(badge)
                 self.stats_container.add_widget(r_card)

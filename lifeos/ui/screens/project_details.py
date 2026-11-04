@@ -1,14 +1,11 @@
-"""Project Details Screen for LifeOS."""
+"""Project Details Screen for LifeOS (Shadcn / React Native style)."""
 
 from kivy.uix.screenmanager import Screen
 from kivy.uix.boxlayout import BoxLayout
 from kivy.uix.scrollview import ScrollView
 from kivy.uix.label import Label
 from kivy.graphics import Color, Rectangle
-from lifeos.ui.theme import (
-    BG_CANVAS, BG_CARD, BG_CARD_HOVER, BORDER_COLOR,
-    GOLD, CHAMPAGNE, TEXT_PRIMARY, TEXT_SECONDARY, TEXT_MUTED
-)
+from lifeos.ui.theme import theme
 from lifeos.ui.components.card import AtelierCard
 from lifeos.ui.components.buttons import AtelierButton, AtelierGhostButton, AtelierBadge
 from lifeos.ui.components.checkbox import AtelierCheckbox
@@ -25,7 +22,7 @@ class ProjectDetailsScreen(Screen):
         self.project_data = None
 
         with self.canvas.before:
-            Color(rgba=BG_CANVAS)
+            self._bg_col = Color(rgba=theme.bg_canvas)
             self._bg = Rectangle(pos=self.pos, size=self.size)
         self.bind(pos=self._update_bg, size=self._update_bg)
 
@@ -45,8 +42,8 @@ class ProjectDetailsScreen(Screen):
         self.scroll = ScrollView(size_hint=(1, 1), do_scroll_x=False)
         self.content = BoxLayout(
             orientation="vertical",
-            spacing=16,
-            padding=[16, 16, 16, 24],
+            spacing=14,
+            padding=[16, 14, 16, 24],
             size_hint_y=None
         )
         self.content.bind(minimum_height=self.content.setter("height"))
@@ -56,6 +53,11 @@ class ProjectDetailsScreen(Screen):
         self.add_widget(self.root_box)
 
         bus.subscribe("tasks_updated", lambda *_: self.refresh())
+        bus.subscribe("theme_changed", self._on_theme)
+
+    def _on_theme(self, *args, **kwargs):
+        self._bg_col.rgba = theme.bg_canvas
+        self.refresh()
 
     def _update_bg(self, *args):
         self._bg.pos = self.pos
@@ -73,146 +75,119 @@ class ProjectDetailsScreen(Screen):
         if not self.project_id:
             return
         self.project_data = ds.projects.get_project(self.project_id)
-        self._render()
-
-    def _render(self):
-        self.content.clear_widgets()
         if not self.project_data:
-            self.content.add_widget(Label(text="Projet introuvable.", color=TEXT_MUTED))
             return
 
+        self.content.clear_widgets()
         p = self.project_data
-        self.top_bar.title = p["title"]
-        self.top_bar.subtitle = p.get("category", "Projet").upper()
 
-        # 1. Summary Card
-        card_sum = AtelierCard(
+        # 1. Main Info Card
+        card_info = AtelierCard(
             orientation="vertical",
-            spacing=10,
-            padding=[16, 16, 16, 16],
+            spacing=8,
+            padding=[16, 14, 16, 14],
             size_hint_y=None,
             height=130
         )
-        lbl_desc = Label(
-            text=p.get("description", "") or "Aucune description renseignée.",
-            font_size="13sp",
-            color=TEXT_PRIMARY,
-            halign="left",
-            size_hint_y=None,
-            height=36
-        )
-        lbl_desc.bind(size=lbl_desc.setter("text_size"))
-        card_sum.add_widget(lbl_desc)
+        row_cat = BoxLayout(size_hint_y=None, height=24)
+        cat_badge = AtelierBadge(text=p.get("category", "Dev"))
+        row_cat.add_widget(cat_badge)
+        card_info.add_widget(row_cat)
 
-        prog = p.get("calculated_progress", 0)
-        pbar = AtelierProgressBar(value=prog, bar_height=6)
-        card_sum.add_widget(pbar)
-
-        row_meta = BoxLayout(size_hint_y=None, height=22)
-        lbl_tasks_meta = Label(
-            text=f"Progression : {prog}% ({p.get('completed_tasks', 0)}/{p.get('total_tasks', 0)} terminées)",
-            font_size="12sp",
-            color=GOLD,
-            halign="left"
-        )
-        lbl_tasks_meta.bind(size=lbl_tasks_meta.setter("text_size"))
-        row_meta.add_widget(lbl_tasks_meta)
-        card_sum.add_widget(row_meta)
-        self.content.add_widget(card_sum)
-
-        # 2. Add Task Button
-        btn_add_task = AtelierButton(
-            text="+ Ajouter une tâche à ce projet",
-            font_size="13sp",
-            size_hint_y=None,
-            height=44
-        )
-        btn_add_task.bind(on_release=self._open_add_task_dialog)
-        self.content.add_widget(btn_add_task)
-
-        # 3. Tasks list (Pending & Completed)
-        tasks = ds.tasks.list_tasks(project_id=self.project_id)
-        pending = [t for t in tasks if not t.get("is_completed")]
-        completed = [t for t in tasks if t.get("is_completed")]
-
-        # --- Section À FAIRE ---
-        lbl_sec_todo = Label(
-            text=f"À FAIRE ({len(pending)})",
-            font_size="12sp",
+        lbl_title = Label(
+            text=p["title"],
+            font_size="17sp",
             bold=True,
-            color=GOLD,
+            color=theme.text_primary,
             halign="left",
             size_hint_y=None,
             height=26
         )
-        lbl_sec_todo.bind(size=lbl_sec_todo.setter("text_size"))
-        self.content.add_widget(lbl_sec_todo)
+        lbl_title.bind(size=lbl_title.setter("text_size"))
+        card_info.add_widget(lbl_title)
 
-        if not pending:
-            self.content.add_widget(Label(
-                text="Toutes les tâches de ce projet sont terminées !",
-                font_size="12sp",
-                color=TEXT_MUTED,
-                size_hint_y=None,
-                height=30
-            ))
-        else:
-            for t in pending:
-                self.content.add_widget(self._build_task_row(t))
-
-        # --- Section TERMINÉES ---
-        if completed:
-            lbl_sec_done = Label(
-                text=f"TERMINÉES ({len(completed)})",
-                font_size="12sp",
-                bold=True,
-                color=TEXT_SECONDARY,
-                halign="left",
-                size_hint_y=None,
-                height=26
-            )
-            lbl_sec_done.bind(size=lbl_sec_done.setter("text_size"))
-            self.content.add_widget(lbl_sec_done)
-
-            for t in completed:
-                self.content.add_widget(self._build_task_row(t))
-
-    def _build_task_row(self, t):
-        card = AtelierCard(
-            orientation="horizontal",
-            spacing=12,
-            padding=[12, 10, 12, 10],
+        lbl_desc = Label(
+            text=p.get("description") or "Aucune description",
+            font_size="12sp",
+            color=theme.text_secondary,
+            halign="left",
             size_hint_y=None,
-            height=62
+            height=20
         )
-        cb = AtelierCheckbox(active=bool(t["is_completed"]))
-        cb.bind(on_release=lambda _, tid=t["id"]: ds.tasks.toggle_task(tid))
-        card.add_widget(cb)
+        lbl_desc.bind(size=lbl_desc.setter("text_size"))
+        card_info.add_widget(lbl_desc)
 
-        txt = f"[s]{t['title']}[/s]" if t["is_completed"] else t["title"]
-        lbl = Label(
-            text=txt,
-            markup=True,
-            font_size="13sp",
+        # Progress bar
+        prog_row = BoxLayout(spacing=10, size_hint_y=None, height=18)
+        prog_bar = AtelierProgressBar(value=p.get("calculated_progress", 0), size_hint_x=0.8, pos_hint={"center_y": 0.5})
+        lbl_pct = Label(text=f"{p.get('calculated_progress', 0)}%", font_size="11sp", bold=True, color=theme.primary, size_hint_x=0.2)
+        prog_row.add_widget(prog_bar)
+        prog_row.add_widget(lbl_pct)
+        card_info.add_widget(prog_row)
+
+        self.content.add_widget(card_info)
+
+        # 2. Tasks header & Add button
+        row_tasks_head = BoxLayout(size_hint_y=None, height=28)
+        lbl_th = Label(
+            text=f"TÂCHES LIÉES ({len(p.get('tasks', []))})",
+            font_size="11sp",
             bold=True,
-            color=TEXT_MUTED if t["is_completed"] else TEXT_PRIMARY,
+            color=theme.text_secondary,
             halign="left"
         )
-        lbl.bind(size=lbl.setter("text_size"))
-        card.add_widget(lbl)
+        lbl_th.bind(size=lbl_th.setter("text_size"))
+        row_tasks_head.add_widget(lbl_th)
 
-        badge = AtelierBadge(text=t.get("priority", "MEDIUM"))
-        card.add_widget(badge)
+        btn_add_t = AtelierGhostButton(
+            text="+ Tâche",
+            font_size="11sp",
+            size_hint=(None, 1),
+            width=76
+        )
+        btn_add_t.bind(on_release=self._open_add_task_dialog)
+        row_tasks_head.add_widget(btn_add_t)
+        self.content.add_widget(row_tasks_head)
 
-        card.bind(on_touch_down=lambda inst, touch, tid=t["id"]: self._on_task_tap(inst, touch, tid))
-        return card
+        # 3. Tasks list
+        tasks = p.get("tasks", [])
+        if not tasks:
+            self.content.add_widget(Label(
+                text="Aucune tâche dans ce projet.",
+                font_size="13sp",
+                color=theme.text_muted,
+                size_hint_y=None,
+                height=60
+            ))
+        else:
+            for t in tasks:
+                t_card = AtelierCard(
+                    orientation="horizontal",
+                    spacing=12,
+                    padding=[12, 10, 12, 10],
+                    size_hint_y=None,
+                    height=56
+                )
+                cb = AtelierCheckbox(active=bool(t["is_completed"]))
+                cb.bind(on_release=lambda _, tid=t["id"]: ds.tasks.toggle_task(tid))
+                t_card.add_widget(cb)
 
-    def _on_task_tap(self, instance, touch, task_id):
-        if instance.collide_point(*touch.pos) and touch.x > instance.x + 40:
-            if self.manager and "task_details" in self.manager.screen_names:
-                scr = self.manager.get_screen("task_details")
-                scr.load_task(task_id)
-                self.manager.current = "task_details"
+                txt = f"[s]{t['title']}[/s]" if t["is_completed"] else t["title"]
+                lbl = Label(
+                    text=txt,
+                    markup=True,
+                    font_size="13sp",
+                    bold=True,
+                    color=theme.text_muted if t["is_completed"] else theme.text_primary,
+                    halign="left"
+                )
+                lbl.bind(size=lbl.setter("text_size"))
+                t_card.add_widget(lbl)
+
+                badge = AtelierBadge(text=t.get("priority", "MEDIUM"))
+                t_card.add_widget(badge)
+
+                self.content.add_widget(t_card)
 
     def _open_add_task_dialog(self, *args):
         dialog = AddTaskDialog(

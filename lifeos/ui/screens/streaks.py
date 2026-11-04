@@ -1,4 +1,4 @@
-"""Streaks & Daily Checklist Protocol Screen for LifeOS."""
+"""Streaks & Daily Checklist Protocol Screen for LifeOS (Shadcn / React Native style)."""
 
 from datetime import date
 from kivy.uix.screenmanager import Screen
@@ -6,12 +6,9 @@ from kivy.uix.boxlayout import BoxLayout
 from kivy.uix.gridlayout import GridLayout
 from kivy.uix.scrollview import ScrollView
 from kivy.uix.label import Label
-from kivy.graphics import Color, Rectangle, RoundedRectangle, Line
+from kivy.graphics import Color, Rectangle
 from kivymd.uix.button import MDIconButton
-from lifeos.ui.theme import (
-    BG_CANVAS, BG_CARD, BG_CARD_HOVER, BORDER_COLOR,
-    GOLD, CHAMPAGNE, TEXT_PRIMARY, TEXT_SECONDARY, TEXT_MUTED, SUCCESS, WARNING
-)
+from lifeos.ui.theme import theme
 from lifeos.ui.components.card import AtelierCard
 from lifeos.ui.components.buttons import AtelierButton, AtelierGhostButton, AtelierBadge
 from lifeos.ui.components.checkbox import AtelierCheckbox
@@ -24,7 +21,7 @@ class StreaksScreen(Screen):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         with self.canvas.before:
-            Color(rgba=BG_CANVAS)
+            self._bg_col = Color(rgba=theme.bg_canvas)
             self._bg = Rectangle(pos=self.pos, size=self.size)
         self.bind(pos=self._update_bg, size=self._update_bg)
 
@@ -60,7 +57,12 @@ class StreaksScreen(Screen):
 
         bus.subscribe("streaks_updated", lambda *_: self.refresh_data())
         bus.subscribe("habits_updated", lambda *_: self.refresh_data())
+        bus.subscribe("theme_changed", self._on_theme)
 
+        self.refresh_data()
+
+    def _on_theme(self, *args, **kwargs):
+        self._bg_col.rgba = theme.bg_canvas
         self.refresh_data()
 
     def _update_bg(self, *args):
@@ -93,42 +95,39 @@ class StreaksScreen(Screen):
             spacing=10,
             padding=[16, 14, 16, 14],
             size_hint_y=None,
-            height=128
+            height=120
         )
-        # Top line: Date and Live Status
         top_row = BoxLayout(size_hint_y=None, height=20)
         lbl_date = Label(
             text=f"PROTOCOLE DU {today_str.upper()}",
             font_size="10sp",
             bold=True,
-            color=GOLD,
+            color=theme.text_secondary,
             halign="left"
         )
         lbl_date.bind(size=lbl_date.setter("text_size"))
         top_row.add_widget(lbl_date)
         flame_card.add_widget(top_row)
 
-        # Large Streak Flame Text
-        flame_row = BoxLayout(spacing=8, size_hint_y=None, height=36)
+        flame_row = BoxLayout(spacing=8, size_hint_y=None, height=32)
         lbl_flame = Label(
-            text=f"🔥 {max_streak} jours de discipline active",
+            text=f"{max_streak} jours de discipline active",
             font_size="18sp",
             bold=True,
-            color=TEXT_PRIMARY,
+            color=theme.text_primary,
             halign="left"
         )
         lbl_flame.bind(size=lbl_flame.setter("text_size"))
         flame_row.add_widget(lbl_flame)
         flame_card.add_widget(flame_row)
 
-        # Progress bar & fraction
         bar_row = BoxLayout(spacing=10, size_hint_y=None, height=22)
         prog_bar = AtelierProgressBar(value=pct, size_hint_x=0.75, pos_hint={"center_y": 0.5})
         lbl_pct = Label(
             text=f"{completed}/{total} ({pct}%)",
             font_size="12sp",
             bold=True,
-            color=CHAMPAGNE,
+            color=theme.primary,
             size_hint_x=0.25
         )
         bar_row.add_widget(prog_bar)
@@ -142,7 +141,7 @@ class StreaksScreen(Screen):
             text="ENGAGEMENTS DU PROTOCOLE",
             font_size="11sp",
             bold=True,
-            color=GOLD,
+            color=theme.text_secondary,
             halign="left",
             size_hint_y=None,
             height=20
@@ -150,7 +149,6 @@ class StreaksScreen(Screen):
         lbl_sec.bind(size=lbl_sec.setter("text_size"))
         self.content.add_widget(lbl_sec)
 
-        # Checklist cards
         for h in daily_habits:
             is_done = h.get("today_done", False)
 
@@ -159,21 +157,19 @@ class StreaksScreen(Screen):
                 spacing=12,
                 padding=[14, 10, 14, 10],
                 size_hint_y=None,
-                height=64
+                height=62
             )
 
-            # Checkbox
             cb = AtelierCheckbox(active=is_done)
             cb.bind(on_release=lambda _, hid=h["id"]: ds.streaks.toggle_daily_item(hid))
             item_card.add_widget(cb)
 
-            # Name & Streak
             txt_box = BoxLayout(orientation="vertical", spacing=2)
             lbl_name = Label(
                 text=h["name"],
                 font_size="14sp",
                 bold=True,
-                color=TEXT_PRIMARY if not is_done else TEXT_MUTED,
+                color=theme.text_muted if is_done else theme.text_primary,
                 halign="left"
             )
             lbl_name.bind(size=lbl_name.setter("text_size"))
@@ -181,9 +177,9 @@ class StreaksScreen(Screen):
             curr_s = h.get("streak_current", 0)
             best_s = h.get("streak_best", 0)
             lbl_s = Label(
-                text=f"🔥 {curr_s}j  ·  Record: {best_s}j",
-                font_size="10sp",
-                color=GOLD if curr_s > 0 else TEXT_SECONDARY,
+                text=f"{curr_s} jours de suite  ·  Record: {best_s}j",
+                font_size="11sp",
+                color=theme.primary if curr_s > 0 else theme.text_secondary,
                 halign="left"
             )
             lbl_s.bind(size=lbl_s.setter("text_size"))
@@ -192,10 +188,8 @@ class StreaksScreen(Screen):
             txt_box.add_widget(lbl_s)
             item_card.add_widget(txt_box)
 
-            # Status pill
             status_text = "Validé" if is_done else "À faire"
-            status_color = SUCCESS if is_done else TEXT_MUTED
-            badge = AtelierBadge(text=status_text, badge_color=status_color)
+            badge = AtelierBadge(text=status_text)
             item_card.add_widget(badge)
 
             self.content.add_widget(item_card)
@@ -205,7 +199,7 @@ class StreaksScreen(Screen):
             text="TAUX DE RÉUSSITE & PERSISTANCE",
             font_size="11sp",
             bold=True,
-            color=GOLD,
+            color=theme.text_secondary,
             halign="left",
             size_hint_y=None,
             height=24
@@ -216,37 +210,26 @@ class StreaksScreen(Screen):
         rates_card = AtelierCard(
             orientation="vertical",
             spacing=8,
-            padding=[14, 12, 14, 12],
+            padding=[16, 12, 16, 12],
             size_hint_y=None,
-            height=80
+            height=78
         )
         grid_r = GridLayout(cols=3, spacing=10, size_hint_y=1)
 
         r1 = BoxLayout(orientation="vertical")
-        r1.add_widget(Label(text="87%", font_size="18sp", bold=True, color=TEXT_PRIMARY))
-        r1.add_widget(Label(text="Sur 7 jours", font_size="10sp", color=TEXT_SECONDARY))
+        r1.add_widget(Label(text="87%", font_size="18sp", bold=True, color=theme.text_primary))
+        r1.add_widget(Label(text="Sur 7 jours", font_size="10sp", color=theme.text_secondary))
 
         r2 = BoxLayout(orientation="vertical")
-        r2.add_widget(Label(text="91%", font_size="18sp", bold=True, color=GOLD))
-        r2.add_widget(Label(text="Sur 30 jours", font_size="10sp", color=TEXT_SECONDARY))
+        r2.add_widget(Label(text="91%", font_size="18sp", bold=True, color=theme.primary))
+        r2.add_widget(Label(text="Sur 30 jours", font_size="10sp", color=theme.text_secondary))
 
         r3 = BoxLayout(orientation="vertical")
-        r3.add_widget(Label(text="84%", font_size="18sp", bold=True, color=CHAMPAGNE))
-        r3.add_widget(Label(text="Sur 90 jours", font_size="10sp", color=TEXT_SECONDARY))
+        r3.add_widget(Label(text="84%", font_size="18sp", bold=True, color=theme.text_primary))
+        r3.add_widget(Label(text="Sur 90 jours", font_size="10sp", color=theme.text_secondary))
 
         grid_r.add_widget(r1)
         grid_r.add_widget(r2)
         grid_r.add_widget(r3)
         rates_card.add_widget(grid_r)
         self.content.add_widget(rates_card)
-
-        # 4. Offline note
-        lbl_offline = Label(
-            text="🔒 Protocole calculé en local · 100% Hors-ligne SQLite",
-            font_size="11sp",
-            color=TEXT_MUTED,
-            halign="center",
-            size_hint_y=None,
-            height=28
-        )
-        self.content.add_widget(lbl_offline)

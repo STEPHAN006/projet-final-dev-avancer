@@ -1,16 +1,14 @@
-"""Navigation Bars (TopBar & BottomBar) for Atelier OS."""
+"""React Native / Shadcn Style Navigation Bars (TopBar & BottomBar) for LifeOS."""
 
 from kivy.uix.boxlayout import BoxLayout
 from kivy.uix.label import Label
 from kivy.uix.behaviors import ButtonBehavior
 from kivy.graphics import Color, RoundedRectangle, Line, Rectangle
-from kivy.properties import StringProperty, ListProperty, NumericProperty
+from kivy.properties import StringProperty
 from kivymd.uix.button import MDIconButton
 from kivymd.uix.label import MDIcon
-from lifeos.ui.theme import (
-    BG_SURFACE, BORDER_COLOR, GOLD, TEXT_PRIMARY,
-    TEXT_SECONDARY, TEXT_MUTED
-)
+from lifeos.ui.theme import theme
+from lifeos.core.events import bus
 
 class AtelierTopBar(BoxLayout):
     title = StringProperty("LifeOS")
@@ -20,80 +18,121 @@ class AtelierTopBar(BoxLayout):
         super().__init__(**kwargs)
         self.orientation = "horizontal"
         self.size_hint_y = None
-        self.height = 56
-        self.padding = [12, 4, 12, 4]
-        self.spacing = 8
+        self.height = 54
+        self.padding = [14, 4, 14, 4]
+        self.spacing = 10
 
         with self.canvas.before:
-            Color(rgba=BG_SURFACE)
+            self._bg_col = Color(rgba=theme.bg_surface)
             self._bg = Rectangle(pos=self.pos, size=self.size)
-            Color(rgba=BORDER_COLOR)
-            self._border = Line(points=[self.x, self.y, self.right, self.y], width=1.1)
+            self._border_col = Color(rgba=theme.border)
+            self._border = Line(points=[self.x, self.y, self.right, self.y], width=1.0)
 
         self.bind(pos=self._update, size=self._update)
 
-        # Back button or Logo Icon
+        # Back button or App Brand Icon
         if on_back:
             btn_back = MDIconButton(
                 icon="arrow-left",
                 theme_icon_color="Custom",
-                icon_color=TEXT_PRIMARY,
+                icon_color=theme.text_primary,
+                size_hint=(None, None),
+                size=(36, 36),
                 pos_hint={"center_y": 0.5}
             )
             btn_back.bind(on_release=lambda x: on_back())
             self.add_widget(btn_back)
         else:
-            # Sanctuary symbol
-            icon_box = Label(
-                text="Ω",
-                font_size="20sp",
-                bold=True,
-                color=GOLD,
-                size_hint=(None, None),
-                size=(36, 36),
-                pos_hint={"center_y": 0.5}
+            # Modern Brand Icon (Lightning / Pulse)
+            icon_box = BoxLayout(size_hint=(None, None), size=(32, 32), pos_hint={"center_y": 0.5})
+            with icon_box.canvas.before:
+                self._logo_bg_col = Color(rgba=theme.bg_muted)
+                self._logo_rect = RoundedRectangle(pos=icon_box.pos, size=icon_box.size, radius=[8])
+            icon_box.bind(pos=lambda *_: setattr(self._logo_rect, "pos", icon_box.pos),
+                          size=lambda *_: setattr(self._logo_rect, "size", icon_box.size))
+
+            self.brand_icon = MDIcon(
+                icon="lightning-bolt",
+                theme_text_color="Custom",
+                text_color=theme.primary,
+                font_size="18sp",
+                halign="center",
+                valign="middle"
             )
+            icon_box.add_widget(self.brand_icon)
             self.add_widget(icon_box)
 
-        # Title and Subtitle
-        text_layout = BoxLayout(orientation="vertical", spacing=0, pos_hint={"center_y": 0.5})
-        lbl_title = Label(
+        # Title & Subtitle column
+        text_layout = BoxLayout(orientation="vertical", spacing=1, pos_hint={"center_y": 0.5})
+        self.lbl_title = Label(
             text=self.title,
             font_size="16sp",
             bold=True,
-            color=TEXT_PRIMARY,
+            color=theme.text_primary,
             halign="left",
             valign="middle",
             size_hint_y=0.6
         )
-        lbl_title.bind(size=lbl_title.setter("text_size"))
-        self.bind(title=lbl_title.setter("text"))
+        self.lbl_title.bind(size=self.lbl_title.setter("text_size"))
+        self.bind(title=self.lbl_title.setter("text"))
 
-        lbl_sub = Label(
+        self.lbl_sub = Label(
             text=self.subtitle.upper(),
             font_size="10sp",
-            color=GOLD,
+            bold=True,
+            color=theme.text_secondary,
             halign="left",
             valign="middle",
             size_hint_y=0.4
         )
-        lbl_sub.bind(size=lbl_sub.setter("text_size"))
-        self.bind(subtitle=lambda _, val: setattr(lbl_sub, 'text', val.upper()))
+        self.lbl_sub.bind(size=self.lbl_sub.setter("text_size"))
+        self.bind(subtitle=lambda _, val: setattr(self.lbl_sub, 'text', val.upper()))
 
-        text_layout.add_widget(lbl_title)
-        text_layout.add_widget(lbl_sub)
+        text_layout.add_widget(self.lbl_title)
+        text_layout.add_widget(self.lbl_sub)
         self.add_widget(text_layout)
+
+        # Theme Toggle Icon (Sun / Moon)
+        t_icon = "weather-night" if theme.is_light else "white-balance-sunny"
+        self.btn_theme = MDIconButton(
+            icon=t_icon,
+            theme_icon_color="Custom",
+            icon_color=theme.text_secondary,
+            size_hint=(None, None),
+            size=(36, 36),
+            pos_hint={"center_y": 0.5}
+        )
+        self.btn_theme.bind(on_release=lambda _: self._toggle_theme())
+        self.add_widget(self.btn_theme)
 
         # Right Action if provided
         if right_action and right_icon:
             btn_right = MDIconButton(
                 icon=right_icon,
                 theme_icon_color="Custom",
-                icon_color=GOLD,
+                icon_color=theme.primary,
+                size_hint=(None, None),
+                size=(36, 36),
                 pos_hint={"center_y": 0.5}
             )
             btn_right.bind(on_release=lambda x: right_action())
             self.add_widget(btn_right)
+
+        bus.subscribe("theme_changed", self._on_theme)
+
+    def _toggle_theme(self):
+        theme.toggle()
+
+    def _on_theme(self, *args, **kwargs):
+        self._bg_col.rgba = theme.bg_surface
+        self._border_col.rgba = theme.border
+        self.lbl_title.color = theme.text_primary
+        self.lbl_sub.color = theme.text_secondary
+        if hasattr(self, "_logo_bg_col"):
+            self._logo_bg_col.rgba = theme.bg_muted
+            self.brand_icon.text_color = theme.primary
+        self.btn_theme.icon = "weather-night" if theme.is_light else "white-balance-sunny"
+        self.btn_theme.icon_color = theme.text_secondary
 
     def _update(self, *args):
         self._bg.pos = self.pos
@@ -108,20 +147,29 @@ class NavTabItem(ButtonBehavior, BoxLayout):
         self.is_active = is_active
         self.on_select = on_select
         self.orientation = "vertical"
-        self.spacing = 2
-        self.padding = [0, 6, 0, 4]
+        self.spacing = 1
+        self.padding = [0, 4, 0, 4]
 
-        color = GOLD if is_active else TEXT_SECONDARY
+        color = theme.primary if is_active else theme.text_secondary
+
+        # Icon wrapper with subtle pill indicator
+        self.icon_box = BoxLayout(size_hint=(None, None), size=(36, 24), pos_hint={"center_x": 0.5})
+        with self.icon_box.canvas.before:
+            self._pill_col = Color(rgba=[theme.primary[0], theme.primary[1], theme.primary[2], 0.15 if is_active else 0.0])
+            self._pill = RoundedRectangle(pos=self.icon_box.pos, size=self.icon_box.size, radius=[12])
+        self.icon_box.bind(pos=lambda *_: setattr(self._pill, "pos", self.icon_box.pos),
+                           size=lambda *_: setattr(self._pill, "size", self.icon_box.size))
 
         self.icon_widget = MDIcon(
             icon=icon_name,
             theme_text_color="Custom",
             text_color=color,
-            font_size="22sp",
+            font_size="20sp",
             halign="center",
-            size_hint_y=0.65
+            pos_hint={"center_y": 0.5}
         )
-        self.add_widget(self.icon_widget)
+        self.icon_box.add_widget(self.icon_widget)
+        self.add_widget(self.icon_box)
 
         self.label_widget = Label(
             text=label_text,
@@ -129,12 +177,10 @@ class NavTabItem(ButtonBehavior, BoxLayout):
             bold=is_active,
             color=color,
             halign="center",
-            size_hint_y=0.35
+            size_hint_y=None,
+            height=14
         )
         self.add_widget(self.label_widget)
-
-        # Active indicator pip
-        self.bind(pos=self._update_pip, size=self._update_pip)
 
     def on_release(self):
         if self.on_select:
@@ -142,22 +188,11 @@ class NavTabItem(ButtonBehavior, BoxLayout):
 
     def set_active(self, active: bool):
         self.is_active = active
-        color = GOLD if active else TEXT_SECONDARY
+        color = theme.primary if active else theme.text_secondary
         self.icon_widget.text_color = color
         self.label_widget.color = color
         self.label_widget.bold = active
-        self._update_pip()
-
-    def _update_pip(self, *args):
-        self.canvas.after.clear()
-        if self.is_active:
-            with self.canvas.after:
-                Color(rgba=GOLD)
-                RoundedRectangle(
-                    pos=(self.center_x - 10, self.y + 2),
-                    size=(20, 2.5),
-                    radius=[1.5]
-                )
+        self._pill_col.rgba = [theme.primary[0], theme.primary[1], theme.primary[2], 0.15 if active else 0.0]
 
 
 class AtelierBottomNav(BoxLayout):
@@ -168,14 +203,14 @@ class AtelierBottomNav(BoxLayout):
         self.nav_callback = nav_callback
         self.orientation = "horizontal"
         self.size_hint_y = None
-        self.height = 60
+        self.height = 56
         self.items = {}
 
         with self.canvas.before:
-            Color(rgba=BG_SURFACE)
+            self._bg_col = Color(rgba=theme.bg_surface)
             self._bg = Rectangle(pos=self.pos, size=self.size)
-            Color(rgba=BORDER_COLOR)
-            self._border = Line(points=[self.x, self.top, self.right, self.top], width=1.1)
+            self._border_col = Color(rgba=theme.border)
+            self._border = Line(points=[self.x, self.top, self.right, self.top], width=1.0)
 
         self.bind(pos=self._update, size=self._update)
 
@@ -197,6 +232,14 @@ class AtelierBottomNav(BoxLayout):
             )
             self.items[route] = item
             self.add_widget(item)
+
+        bus.subscribe("theme_changed", self._on_theme)
+
+    def _on_theme(self, *args, **kwargs):
+        self._bg_col.rgba = theme.bg_surface
+        self._border_col.rgba = theme.border
+        for r, itm in self.items.items():
+            itm.set_active(r == self.current_tab)
 
     def _on_item_click(self, route):
         self.set_tab(route)

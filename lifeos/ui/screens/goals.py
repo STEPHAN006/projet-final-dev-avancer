@@ -1,16 +1,13 @@
-"""Goals & Milestones Screen for LifeOS (Strategic Objectives)."""
+"""Goals & Milestones Screen for LifeOS (Shadcn / React Native style)."""
 
 from kivy.uix.screenmanager import Screen
 from kivy.uix.boxlayout import BoxLayout
 from kivy.uix.gridlayout import GridLayout
 from kivy.uix.scrollview import ScrollView
 from kivy.uix.label import Label
-from kivy.graphics import Color, Rectangle, RoundedRectangle, Line
+from kivy.graphics import Color, Rectangle
 from kivymd.uix.button import MDIconButton
-from lifeos.ui.theme import (
-    BG_CANVAS, BG_CARD, BG_CARD_HOVER, BORDER_COLOR,
-    GOLD, CHAMPAGNE, TEXT_PRIMARY, TEXT_SECONDARY, TEXT_MUTED, SUCCESS, WARNING
-)
+from lifeos.ui.theme import theme
 from lifeos.ui.components.card import AtelierCard
 from lifeos.ui.components.buttons import AtelierButton, AtelierGhostButton, AtelierBadge
 from lifeos.ui.components.checkbox import AtelierCheckbox
@@ -24,7 +21,7 @@ class GoalCard(AtelierCard):
     def __init__(self, goal, on_toggle_ms=None, on_delete=None, **kwargs):
         kwargs.setdefault("orientation", "vertical")
         kwargs.setdefault("spacing", 10)
-        kwargs.setdefault("padding", [14, 12, 14, 12])
+        kwargs.setdefault("padding", [16, 14, 16, 14])
         kwargs.setdefault("size_hint_y", None)
         super().__init__(**kwargs)
 
@@ -33,17 +30,14 @@ class GoalCard(AtelierCard):
 
         # Top row: Category tag, Target Date, Status Badge, Delete
         top_row = BoxLayout(size_hint_y=None, height=26)
-        cat_badge = AtelierBadge(
-            text=f"#{goal.get('category', 'Dev')}",
-            badge_color=GOLD
-        )
+        cat_badge = AtelierBadge(text=goal.get("category", "Dev"))
         top_row.add_widget(cat_badge)
 
         date_str = goal.get("target_date") or "Sans date"
         lbl_date = Label(
-            text=f"📅 {date_str}",
+            text=f"Échéance: {date_str}",
             font_size="11sp",
-            color=TEXT_SECONDARY,
+            color=theme.text_secondary,
             halign="left"
         )
         lbl_date.bind(size=lbl_date.setter("text_size"))
@@ -51,15 +45,14 @@ class GoalCard(AtelierCard):
 
         is_completed = goal.get("status") == "completed" or goal.get("progress", 0) >= 100
         st_text = "ACCOMPLI" if is_completed else "EN COURS"
-        st_color = SUCCESS if is_completed else WARNING
-        st_badge = AtelierBadge(text=st_text, badge_color=st_color)
+        st_badge = AtelierBadge(text=st_text)
         top_row.add_widget(st_badge)
 
         if on_delete:
             btn_del = MDIconButton(
                 icon="delete-outline",
                 theme_icon_color="Custom",
-                icon_color=TEXT_MUTED,
+                icon_color=theme.text_muted,
                 size_hint=(None, None),
                 size=(28, 28)
             )
@@ -73,7 +66,7 @@ class GoalCard(AtelierCard):
             text=goal["title"],
             font_size="15sp",
             bold=True,
-            color=TEXT_PRIMARY,
+            color=theme.text_primary,
             halign="left",
             size_hint_y=None,
             height=26
@@ -85,7 +78,7 @@ class GoalCard(AtelierCard):
             lbl_desc = Label(
                 text=goal["description"],
                 font_size="11sp",
-                color=TEXT_SECONDARY,
+                color=theme.text_secondary,
                 halign="left",
                 size_hint_y=None,
                 height=20
@@ -97,7 +90,7 @@ class GoalCard(AtelierCard):
         prog = goal.get("progress", 0)
         prog_row = BoxLayout(spacing=10, size_hint_y=None, height=18)
         p_bar = AtelierProgressBar(value=prog, size_hint_x=0.8, pos_hint={"center_y": 0.5})
-        lbl_pct = Label(text=f"{prog}%", font_size="11sp", bold=True, color=GOLD, size_hint_x=0.2)
+        lbl_pct = Label(text=f"{prog}%", font_size="11sp", bold=True, color=theme.primary, size_hint_x=0.2)
         prog_row.add_widget(p_bar)
         prog_row.add_widget(lbl_pct)
         self.add_widget(prog_row)
@@ -109,7 +102,7 @@ class GoalCard(AtelierCard):
                 text=f"Jalons Clés ({sum(1 for m in milestones if m.get('done'))}/{len(milestones)})",
                 font_size="11sp",
                 bold=True,
-                color=GOLD,
+                color=theme.text_secondary,
                 halign="left",
                 size_hint_y=None,
                 height=20
@@ -126,14 +119,13 @@ class GoalCard(AtelierCard):
                 m_lbl = Label(
                     text=ms.get("title", ""),
                     font_size="12sp",
-                    color=TEXT_MUTED if ms.get("done") else TEXT_PRIMARY,
+                    color=theme.text_muted if ms.get("done") else theme.text_primary,
                     halign="left"
                 )
                 m_lbl.bind(size=m_lbl.setter("text_size"))
                 m_row.add_widget(m_lbl)
                 self.add_widget(m_row)
 
-        # Calculate total height
         ms_count = len(milestones)
         self.height = 130 + (ms_count * 28 + 24 if ms_count > 0 else 0)
 
@@ -148,7 +140,7 @@ class GoalsScreen(Screen):
         self.selected_category = "Tous"
 
         with self.canvas.before:
-            Color(rgba=BG_CANVAS)
+            self._bg_col = Color(rgba=theme.bg_canvas)
             self._bg = Rectangle(pos=self.pos, size=self.size)
         self.bind(pos=self._update_bg, size=self._update_bg)
 
@@ -185,7 +177,12 @@ class GoalsScreen(Screen):
         self.add_widget(self.root_box)
 
         bus.subscribe("goals_updated", lambda *_: self.refresh_goals())
+        bus.subscribe("theme_changed", self._on_theme)
 
+        self.refresh_goals()
+
+    def _on_theme(self, *args, **kwargs):
+        self._bg_col.rgba = theme.bg_canvas
         self.refresh_goals()
 
     def _update_bg(self, *args):
@@ -217,7 +214,7 @@ class GoalsScreen(Screen):
         kpi_card = AtelierCard(
             orientation="vertical",
             spacing=8,
-            padding=[14, 12, 14, 12],
+            padding=[16, 12, 16, 12],
             size_hint_y=None,
             height=86
         )
@@ -225,7 +222,7 @@ class GoalsScreen(Screen):
             text="PORTFOLIO DES PRIORITÉS CARDINALES",
             font_size="10sp",
             bold=True,
-            color=GOLD,
+            color=theme.text_secondary,
             halign="left",
             size_hint_y=None,
             height=16
@@ -235,20 +232,20 @@ class GoalsScreen(Screen):
 
         grid = GridLayout(cols=4, spacing=8, size_hint_y=None, height=44)
         c1 = BoxLayout(orientation="vertical")
-        c1.add_widget(Label(text=f"{total}", font_size="17sp", bold=True, color=TEXT_PRIMARY))
-        c1.add_widget(Label(text="Total", font_size="10sp", color=TEXT_SECONDARY))
+        c1.add_widget(Label(text=f"{total}", font_size="17sp", bold=True, color=theme.text_primary))
+        c1.add_widget(Label(text="Total", font_size="10sp", color=theme.text_secondary))
 
         c2 = BoxLayout(orientation="vertical")
-        c2.add_widget(Label(text=f"{active}", font_size="17sp", bold=True, color=GOLD))
-        c2.add_widget(Label(text="En cours", font_size="10sp", color=TEXT_SECONDARY))
+        c2.add_widget(Label(text=f"{active}", font_size="17sp", bold=True, color=theme.primary))
+        c2.add_widget(Label(text="En cours", font_size="10sp", color=theme.text_secondary))
 
         c3 = BoxLayout(orientation="vertical")
-        c3.add_widget(Label(text=f"{completed}", font_size="17sp", bold=True, color=SUCCESS))
-        c3.add_widget(Label(text="Validés", font_size="10sp", color=TEXT_SECONDARY))
+        c3.add_widget(Label(text=f"{completed}", font_size="17sp", bold=True, color=theme.success))
+        c3.add_widget(Label(text="Validés", font_size="10sp", color=theme.text_secondary))
 
         c4 = BoxLayout(orientation="vertical")
-        c4.add_widget(Label(text=f"{global_pct}%", font_size="17sp", bold=True, color=CHAMPAGNE))
-        c4.add_widget(Label(text="Accompli", font_size="10sp", color=TEXT_SECONDARY))
+        c4.add_widget(Label(text=f"{global_pct}%", font_size="17sp", bold=True, color=theme.text_primary))
+        c4.add_widget(Label(text="Accompli", font_size="10sp", color=theme.text_secondary))
 
         grid.add_widget(c1)
         grid.add_widget(c2)
@@ -283,8 +280,8 @@ class GoalsScreen(Screen):
         if not filtered_goals:
             self.content.add_widget(Label(
                 text="Aucun objectif dans cette catégorie.",
-                font_size="12sp",
-                color=TEXT_MUTED,
+                font_size="13sp",
+                color=theme.text_muted,
                 size_hint_y=None,
                 height=40
             ))
@@ -301,7 +298,7 @@ class GoalsScreen(Screen):
         btn_add = AtelierGhostButton(
             text="+ Nouvel Objectif Stratégique",
             size_hint_y=None,
-            height=44
+            height=42
         )
         btn_add.bind(on_release=lambda _: self._open_add_dialog())
         self.content.add_widget(btn_add)
