@@ -1,6 +1,11 @@
 """LifeOS Application Class and Window Manager."""
 
 import sys
+from kivy.config import Config
+
+# Make desktop keyboard input available before Kivy creates the Window.
+Config.set("kivy", "keyboard_mode", "systemanddock")
+
 from kivy.core.window import Window
 from kivy.uix.screenmanager import ScreenManager, FadeTransition
 from kivymd.app import MDApp

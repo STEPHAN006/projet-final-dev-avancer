@@ -6,6 +6,7 @@ from kivy.uix.gridlayout import GridLayout
 from kivy.uix.label import Label
 from kivy.uix.textinput import TextInput
 from kivy.uix.spinner import Spinner
+from kivy.core.window import Window
 from kivy.graphics import Color, RoundedRectangle, Line
 from lifeos.ui.theme import theme
 from lifeos.ui.components.buttons import AtelierButton, AtelierGhostButton
@@ -34,6 +35,19 @@ class ShadcnInput(TextInput):
 
         bus.subscribe("theme_changed", self._on_theme)
 
+    def on_touch_down(self, touch):
+        """Keep the input focusable when it is clicked inside a dialog.
+
+        ModalView/dialog layouts can otherwise leave the focus on the previously
+        selected widget, especially with desktop SDL input providers.
+        """
+        if self.collide_point(*touch.pos):
+            handled = super().on_touch_down(touch)
+            self.focus = True
+            self.cursor = self.get_cursor_from_index(len(self.text))
+            return handled or True
+        return super().on_touch_down(touch)
+
     def _on_theme(self, *args, **kwargs):
         self.foreground_color = theme.text_primary
         self.cursor_color = theme.primary
@@ -46,9 +60,37 @@ class ShadcnInput(TextInput):
         if is_focused:
             self._border_col.rgba = theme.border_focus
             self._border_line.width = 1.4
+            # Explicitly request the desktop keyboard.  This is needed on
+            # some SDL/Kivy installations where TextInput gets focus but the
+            # keyboard provider is not attached automatically.
+            if self._keyboard is None:
+                self._keyboard = Window.request_keyboard(self._keyboard_released, self)
+                if self._keyboard:
+                    self._keyboard.bind(on_key_down=self._keyboard_key_down)
         else:
             self._border_col.rgba = theme.border
             self._border_line.width = 1.0
+
+    def _keyboard_released(self):
+        if self._keyboard:
+            self._keyboard.unbind(on_key_down=self._keyboard_key_down)
+            self._keyboard = None
+
+    def _keyboard_key_down(self, keyboard, keycode, text, modifiers):
+        key = keycode[1]
+        if key == "backspace":
+            if self.selection_text:
+                self.delete_selection()
+            elif self.cursor_index > 0:
+                self.delete_text(self.cursor_index - 1, self.cursor_index)
+            return True
+        if key in ("enter", "numpadenter"):
+            self.focus = False
+            return True
+        if text and not any(mod in modifiers for mod in ("ctrl", "alt", "meta")):
+            self.insert_text(text)
+            return True
+        return False
 
     def _update_canvas(self, *args):
         if hasattr(self, "_bg_rect"):
